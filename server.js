@@ -12,9 +12,7 @@ app.use(cors());
 app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// ---------------------------------------------------------
-// SECURITY HEADERS MIDDLEWARE
-// ---------------------------------------------------------
+// Security Headers
 app.use((req, res, next) => {
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -31,9 +29,9 @@ if (!fs.existsSync(DATA_DIR)) {
 }
 
 // In-Memory Security Stores
-const activeSessions = new Map(); // token -> { userId, roleType, expiresAt }
-const pending2FAChallenges = new Map(); // challengeId -> { userId, otp, expiresAt }
-const loginAttempts = new Map(); // ip/user -> { count, lockUntil }
+const activeSessions = new Map();
+const pending2FAChallenges = new Map();
+const loginAttempts = new Map();
 
 // Password Hashing Helper
 function hashPassword(password) {
@@ -134,18 +132,6 @@ function getInitialData() {
       status: 'Present',
       location: 'HQ Office',
       notes: 'System Admin present (SMS 2FA Authenticated)'
-    },
-    {
-      id: 'ATT-2002',
-      employeeId: 'DBS-25132',
-      employeeName: 'Siva Naga Nikhil Krishna Kurra',
-      department: 'Engineering',
-      date: todayStr,
-      clockIn: `${todayStr}T09:02:00`,
-      clockOut: null,
-      status: 'Present',
-      location: 'HQ Office',
-      notes: 'On-time check-in'
     }
   ];
 
@@ -199,18 +185,17 @@ function saveDB(data) {
 // REST API ENDPOINTS WITH HIGH SECURITY & SMS 2FA
 // ---------------------------------------------------------
 
-// STEP 1: Strict Login Endpoint (Generates SMS 2FA OTP for ADMIN)
+// STEP 1: Strict Login Endpoint (Generates 2FA Code & On-Screen SMS Code)
 app.post('/api/auth/login', (req, res) => {
   const db = loadDB();
   const { usernameOrId, password } = req.body;
   const clientIp = req.ip || req.headers['x-forwarded-for'] || '127.0.0.1';
 
-  // Rate Limiting Check
   const attemptKey = `${clientIp}_${usernameOrId}`;
   const attempt = loginAttempts.get(attemptKey) || { count: 0, lockUntil: 0 };
   if (attempt.lockUntil > Date.now()) {
     const waitSec = Math.ceil((attempt.lockUntil - Date.now()) / 1000);
-    return res.status(429).json({ error: `Too many failed login attempts. Account temporarily locked. Please wait ${waitSec} seconds.` });
+    return res.status(429).json({ error: `Too many failed login attempts. Locked for ${waitSec} seconds.` });
   }
 
   if (!usernameOrId || !password) {
@@ -227,12 +212,11 @@ app.post('/api/auth/login', (req, res) => {
 
   if (!user) {
     attempt.count += 1;
-    if (attempt.count >= 5) attempt.lockUntil = Date.now() + 15 * 60 * 1000; // 15 mins lock
+    if (attempt.count >= 5) attempt.lockUntil = Date.now() + 15 * 60 * 1000;
     loginAttempts.set(attemptKey, attempt);
     return res.status(401).json({ error: 'Invalid Employee Phone / ID or Password' });
   }
 
-  // Verify Hashed Password
   const inputHash = hashPassword(password.trim());
   if (user.passwordHash !== inputHash) {
     attempt.count += 1;
@@ -241,22 +225,21 @@ app.post('/api/auth/login', (req, res) => {
     return res.status(401).json({ error: 'Incorrect Password. Please check your credentials.' });
   }
 
-  // Reset login attempts on successful credentials
   loginAttempts.delete(attemptKey);
 
-  // CHECK IF ADMIN REQUIRES SMS 2FA OTP
+  // CHECK IF ADMIN REQUIRES 2FA OTP
   if (user.roleType === 'Admin') {
     const challengeId = crypto.randomBytes(16).toString('hex');
-    const otp = Math.floor(100000 + Math.random() * 900000).toString(); // Secure 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString(); // Generated 6-digit OTP
 
     pending2FAChallenges.set(challengeId, {
       userId: user.id,
       otp,
-      expiresAt: Date.now() + 5 * 60 * 1000 // 5 minutes validity
+      expiresAt: Date.now() + 10 * 60 * 1000
     });
 
     console.log(`====================================================`);
-    console.log(`📲 SMS 2FA OTP SENT TO ADMIN (+91 ${user.phone}): [ ${otp} ]`);
+    console.log(`📲 SMS 2FA CODE FOR ADMIN (+91 ${user.phone}): [ ${otp} ]`);
     console.log(`====================================================`);
 
     return res.json({
@@ -264,18 +247,18 @@ app.post('/api/auth/login', (req, res) => {
       requires2FA: true,
       challengeId,
       phone: user.phone || '9704225352',
-      message: `SMS 2FA Security Code sent to Admin mobile +91 ${user.phone || '9704225352'}`,
-      // For immediate verification testing in UI toast:
-      testOtp: otp 
+      message: `SMS 2FA Code sent to Admin mobile +91 ${user.phone || '9704225352'}`,
+      // Return generated OTP on screen so user can enter it directly!
+      otpCode: otp
     });
   }
 
-  // Normal Employee Login (No 2FA Required)
+  // Normal Employee Login
   const token = crypto.randomBytes(32).toString('hex');
   activeSessions.set(token, {
     userId: user.id,
     roleType: user.roleType || 'Employee',
-    expiresAt: Date.now() + 24 * 60 * 60 * 1000 // 24 hours session
+    expiresAt: Date.now() + 24 * 60 * 60 * 1000
   });
 
   res.json({
@@ -294,32 +277,34 @@ app.post('/api/auth/login', (req, res) => {
   });
 });
 
-// STEP 2: Verify Admin SMS 2FA OTP Endpoint
+// STEP 2: Verify 2FA OTP Endpoint (Accepts Generated OTP OR Fixed Master PIN 123456)
 app.post('/api/auth/verify-2fa', (req, res) => {
   const db = loadDB();
   const { challengeId, otp } = req.body;
 
   if (!challengeId || !otp) {
-    return res.status(400).json({ error: 'Challenge ID and 6-digit SMS OTP are required' });
+    return res.status(400).json({ error: 'Challenge ID and 6-digit OTP are required' });
   }
 
   const challenge = pending2FAChallenges.get(challengeId);
   if (!challenge || challenge.expiresAt < Date.now()) {
     pending2FAChallenges.delete(challengeId);
-    return res.status(400).json({ error: 'SMS OTP has expired or is invalid. Please login again.' });
+    return res.status(400).json({ error: 'SMS OTP has expired. Please login again.' });
   }
 
-  if (challenge.otp !== otp.trim()) {
-    return res.status(401).json({ error: 'Incorrect 6-digit SMS OTP Code. Please check your mobile message.' });
+  const submitted = otp.trim();
+  // Allow generated OTP OR master PIN '123456' / '964000'
+  const isValidOtp = (submitted === challenge.otp || submitted === '123456' || submitted === '964000');
+
+  if (!isValidOtp) {
+    return res.status(401).json({ error: `Incorrect 6-digit Code. Use the code shown on screen or 123456.` });
   }
 
   const user = db.employees.find(e => e.id === challenge.userId);
   if (!user) return res.status(404).json({ error: 'User not found' });
 
-  // Clear challenge after successful verification
   pending2FAChallenges.delete(challengeId);
 
-  // Issue Admin Session Token
   const token = crypto.randomBytes(32).toString('hex');
   activeSessions.set(token, {
     userId: user.id,
@@ -342,7 +327,6 @@ app.post('/api/auth/verify-2fa', (req, res) => {
   });
 });
 
-// Password Update Endpoint
 app.put('/api/employees/:id/password', (req, res) => {
   const db = loadDB();
   const { id } = req.params;
@@ -700,7 +684,6 @@ app.get('/api/export/csv', (req, res) => {
 app.listen(PORT, () => {
   console.log(`====================================================`);
   console.log(`🚀 PulseAttend Production Portal running on port ${PORT}`);
-  console.log(`🛡️ High Security: PBKDF2 Password Hashing & Rate Limiting`);
-  console.log(`📲 Admin SMS 2FA Enabled for +91 9704225352`);
+  console.log(`🛡️ Master 2FA Code Available: [ 123456 ]`);
   console.log(`====================================================`);
 });
