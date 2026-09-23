@@ -18,7 +18,7 @@ if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
-// 55 Exact Real Employees provided by user
+// 55 Exact Real Employees list
 const RAW_STAFF_LIST = [
   { id: 'DBS-25132', name: 'Siva Naga Nikhil Krishna Kurra', department: 'Engineering' },
   { id: 'DBS-2519', name: 'Shiloni Sastry Dunna', department: 'HR' },
@@ -70,7 +70,7 @@ const RAW_STAFF_LIST = [
   { id: 'DBS-306', name: 'Rajesh Dhabbakuti', department: 'Operations' },
   { id: 'DBS-2661', name: 'Pendyala Venkata Ramesh', department: 'Operations' },
   { id: 'DBS-2617', name: 'Karthik Dividevara', department: 'Engineering' },
-  { id: 'DBS-540', name: 'Sagar Alapati', department: 'Executive Management', roleType: 'Admin' }, // SAGAR ALAPATI IS ADMIN!
+  { id: 'DBS-540', name: 'Sagar Alapati', department: 'Executive Management', roleType: 'Admin' },
   { id: 'DBS-25158', name: 'Atla Naga Venu', department: 'Operations' },
   { id: 'DBS-550', name: 'Prathyush Raj Bontha', department: 'Engineering' },
   { id: 'DBS-25138', name: 'Surendra Gudvalli', department: 'Engineering' },
@@ -88,7 +88,7 @@ function getInitialData() {
       name: item.name,
       department: item.department || 'Operations',
       role: isAdmin ? 'System Administrator' : 'Team Member',
-      roleType: isAdmin ? 'Admin' : (item.roleType || 'Employee'), // 'Admin', 'Manager', 'Team Lead', 'Employee'
+      roleType: isAdmin ? 'Admin' : (item.roleType || 'Employee'),
       email: `${item.name.toLowerCase().replace(/[^a-z0-9]/g, '.')}@dbs.com`,
       shift: '09:00 - 17:00',
       status: 'Active',
@@ -97,7 +97,6 @@ function getInitialData() {
     };
   });
 
-  // Seed sample attendance for today so Present/Absent views have initial data
   const attendance = [
     {
       id: 'ATT-2001',
@@ -109,7 +108,7 @@ function getInitialData() {
       clockOut: null,
       status: 'Present',
       location: 'HQ Office',
-      notes: 'System Admin logged in'
+      notes: 'System Admin present'
     },
     {
       id: 'ATT-2002',
@@ -121,7 +120,7 @@ function getInitialData() {
       clockOut: null,
       status: 'Present',
       location: 'HQ Office',
-      notes: 'On-time check-in'
+      notes: 'On-time'
     },
     {
       id: 'ATT-2003',
@@ -131,21 +130,9 @@ function getInitialData() {
       date: todayStr,
       clockIn: `${todayStr}T09:25:00`,
       clockOut: null,
-      status: 'Late',
+      status: 'Half Day',
       location: 'HQ Office',
-      notes: 'Late check-in'
-    },
-    {
-      id: 'ATT-2004',
-      employeeId: 'DBS-327',
-      employeeName: 'Vijaya Sai Krishna Keerthi',
-      department: 'Design',
-      date: todayStr,
-      clockIn: `${todayStr}T08:55:00`,
-      clockOut: `${todayStr}T17:02:00`,
-      status: 'Clocked Out',
-      location: 'Remote (Home)',
-      notes: 'Design review complete'
+      notes: 'Admin marked Half Day'
     }
   ];
 
@@ -159,7 +146,7 @@ function getInitialData() {
       startDate: todayStr,
       endDate: todayStr,
       days: 1,
-      reason: 'Personal work',
+      reason: 'Personal family work',
       status: 'Approved'
     }
   ];
@@ -176,14 +163,11 @@ function loadDB() {
   try {
     const raw = fs.readFileSync(DB_FILE, 'utf8');
     const db = JSON.parse(raw);
-    
-    // Ensure Sagar Alapati is ALWAYS Admin in DB
     const sagar = db.employees.find(e => e.id === 'DBS-540' || e.name.toLowerCase().includes('sagar alapati'));
     if (sagar) {
       sagar.roleType = 'Admin';
       sagar.password = sagar.password || 'admin123';
     }
-
     return db;
   } catch (err) {
     const initial = getInitialData();
@@ -196,9 +180,7 @@ function saveDB(data) {
   fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), 'utf8');
 }
 
-// ---------------------------------------------------------
-// REST API ENDPOINTS & AUTHENTICATION
-// ---------------------------------------------------------
+// API Endpoints
 
 // Authentication Login
 app.post('/api/auth/login', (req, res) => {
@@ -217,14 +199,13 @@ app.post('/api/auth/login', (req, res) => {
   );
 
   if (!user) {
-    return res.status(401).json({ error: 'User not found in employee directory' });
+    return res.status(401).json({ error: 'Employee not found in directory' });
   }
 
-  // Password verification (for admin: 'admin123' or DBS ID; for employee: 'emp123' or DBS ID or any provided password for convenience)
   if (password) {
     const validPasswords = [user.password, 'admin123', 'emp123', user.id, user.id.replace('DBS-', '')];
     if (!validPasswords.includes(password.trim())) {
-      return res.status(401).json({ error: 'Incorrect Password/PIN. Default for Admin: admin123, Employee: emp123' });
+      return res.status(401).json({ error: 'Incorrect Password/PIN' });
     }
   }
 
@@ -235,19 +216,17 @@ app.post('/api/auth/login', (req, res) => {
       name: user.name,
       department: user.department,
       role: user.role,
-      roleType: user.roleType || 'Employee', // 'Admin', 'Manager', 'Team Lead', 'Employee'
+      roleType: user.roleType || 'Employee',
       avatarColor: user.avatarColor
     }
   });
 });
 
-// Employees List
 app.get('/api/employees', (req, res) => {
   const db = loadDB();
   res.json(db.employees);
 });
 
-// Add New Employee (Admin/Manager Only)
 app.post('/api/employees', (req, res) => {
   const db = loadDB();
   const { name, department, role, roleType, email, shift } = req.body;
@@ -264,7 +243,7 @@ app.post('/api/employees', (req, res) => {
     name,
     department,
     role: role || 'Team Member',
-    roleType: roleType || 'Employee', // 'Admin', 'Manager', 'Team Lead', 'Employee'
+    roleType: roleType || 'Employee',
     email: email || `${name.toLowerCase().replace(/\s+/g, '.')}@dbs.com`,
     shift: shift || '09:00 - 17:00',
     status: 'Active',
@@ -277,27 +256,69 @@ app.post('/api/employees', (req, res) => {
   res.status(201).json(newEmp);
 });
 
-// Grant / Update Role Endpoint (Admin Exclusive)
+// Admin Role Granting / Delegation
 app.put('/api/employees/:id/role', (req, res) => {
   const db = loadDB();
   const emp = db.employees.find(e => e.id === req.params.id);
-  if (!emp) {
-    return res.status(404).json({ error: 'Employee not found' });
-  }
+  if (!emp) return res.status(404).json({ error: 'Employee not found' });
 
   const { roleType } = req.body;
   if (!['Admin', 'Manager', 'Team Lead', 'Employee'].includes(roleType)) {
-    return res.status(400).json({ error: 'Invalid Role Type. Must be Admin, Manager, Team Lead, or Employee' });
+    return res.status(400).json({ error: 'Invalid Role Type' });
   }
 
   emp.roleType = roleType;
   if (roleType === 'Admin') emp.password = 'admin123';
   saveDB(db);
 
-  res.json({ success: true, message: `Role for ${emp.name} updated to ${roleType}`, employee: emp });
+  res.json({ success: true, message: `Role updated to ${roleType}`, employee: emp });
 });
 
-// Delete Employee
+// ADMIN ONLY MARK ATTENDANCE (Present, Absent, Half Day, On Leave)
+app.post('/api/attendance/mark', (req, res) => {
+  const db = loadDB();
+  const { employeeId, status, date, notes } = req.body;
+
+  if (!employeeId || !status) {
+    return res.status(400).json({ error: 'Employee ID and Status are required' });
+  }
+
+  const validStatuses = ['Present', 'Absent', 'Half Day', 'Late', 'On Leave', 'Clocked Out'];
+  if (!validStatuses.includes(status)) {
+    return res.status(400).json({ error: 'Status must be Present, Absent, Half Day, Late, or On Leave' });
+  }
+
+  const emp = db.employees.find(e => e.id === employeeId);
+  if (!emp) return res.status(404).json({ error: 'Employee not found' });
+
+  const targetDate = date || new Date().toISOString().split('T')[0];
+  const now = new Date().toISOString();
+
+  let log = db.attendance.find(a => a.employeeId === employeeId && a.date === targetDate);
+
+  if (log) {
+    log.status = status;
+    log.notes = notes || `Marked as ${status} by Admin`;
+  } else {
+    log = {
+      id: `ATT-${Math.floor(2000 + Math.random() * 8000)}`,
+      employeeId: emp.id,
+      employeeName: emp.name,
+      department: emp.department,
+      date: targetDate,
+      clockIn: status === 'Absent' ? null : now,
+      clockOut: status === 'Clocked Out' ? now : null,
+      status,
+      location: 'HQ Office',
+      notes: notes || `Marked as ${status} by Admin`
+    };
+    db.attendance.push(log);
+  }
+
+  saveDB(db);
+  res.json({ success: true, message: `Marked ${emp.name} as ${status}`, log });
+});
+
 app.delete('/api/employees/:id', (req, res) => {
   const db = loadDB();
   db.employees = db.employees.filter(e => e.id !== req.params.id);
@@ -305,7 +326,6 @@ app.delete('/api/employees/:id', (req, res) => {
   res.json({ success: true, message: 'Employee removed' });
 });
 
-// Attendance Logs & Public Present/Absent List
 app.get('/api/attendance', (req, res) => {
   const db = loadDB();
   let logs = [...db.attendance];
@@ -324,11 +344,11 @@ app.get('/api/attendance', (req, res) => {
     );
   }
 
-  logs.sort((a, b) => new Date(b.clockIn) - new Date(a.clockIn));
+  logs.sort((a, b) => new Date(b.clockIn || b.date) - new Date(a.clockIn || a.date));
   res.json(logs);
 });
 
-// Public Today Roster Summary (Who is Present, Absent, On Leave)
+// Present / Absent / Half Day Today Roster Summary
 app.get('/api/attendance/today-summary', (req, res) => {
   const db = loadDB();
   const todayStr = new Date().toISOString().split('T')[0];
@@ -347,13 +367,8 @@ app.get('/api/attendance/today-summary', (req, res) => {
       currentStatus = 'On Leave';
       timeInfo = leave.type;
     } else if (log) {
-      if (log.status === 'Clocked Out') {
-        currentStatus = 'Clocked Out';
-        timeInfo = log.clockOut ? new Date(log.clockOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
-      } else {
-        currentStatus = log.status; // 'Present' or 'Late'
-        timeInfo = log.clockIn ? new Date(log.clockIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
-      }
+      currentStatus = log.status; // 'Present', 'Late', 'Half Day', 'Clocked Out', 'Absent'
+      timeInfo = log.clockIn ? new Date(log.clockIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
     }
 
     return {
@@ -370,7 +385,6 @@ app.get('/api/attendance/today-summary', (req, res) => {
   res.json(rosterStatus);
 });
 
-// Clock In
 app.post('/api/attendance/clock-in', (req, res) => {
   const db = loadDB();
   const { employeeId, location, notes } = req.body;
@@ -411,7 +425,6 @@ app.post('/api/attendance/clock-in', (req, res) => {
   res.status(201).json(newLog);
 });
 
-// Clock Out
 app.post('/api/attendance/clock-out', (req, res) => {
   const db = loadDB();
   const { employeeId } = req.body;
@@ -436,7 +449,6 @@ app.post('/api/attendance/clock-out', (req, res) => {
   res.json(activeLog);
 });
 
-// Dashboard Summary Metrics
 app.get('/api/stats/today', (req, res) => {
   const db = loadDB();
   const todayStr = new Date().toISOString().split('T')[0];
@@ -446,9 +458,10 @@ app.get('/api/stats/today', (req, res) => {
 
   const presentCount = todayLogs.filter(a => a.status === 'Present' || a.status === 'Clocked Out').length;
   const lateCount = todayLogs.filter(a => a.status === 'Late').length;
+  const halfDayCount = todayLogs.filter(a => a.status === 'Half Day').length;
   const onLeaveCount = db.leaves.filter(l => l.status === 'Approved' && l.startDate <= todayStr && l.endDate >= todayStr).length;
 
-  const totalAttended = presentCount + lateCount;
+  const totalAttended = presentCount + lateCount + halfDayCount;
   const absentCount = Math.max(0, totalEmployees - totalAttended - onLeaveCount);
   const attendanceRate = totalEmployees > 0 ? Math.round((totalAttended / totalEmployees) * 100) : 0;
 
@@ -457,13 +470,13 @@ app.get('/api/stats/today', (req, res) => {
     totalEmployees,
     present: presentCount,
     late: lateCount,
+    halfDay: halfDayCount,
     onLeave: onLeaveCount,
     absent: absentCount,
     attendanceRate
   });
 });
 
-// Leave Applications API
 app.get('/api/leaves', (req, res) => {
   const db = loadDB();
   res.json(db.leaves);
@@ -502,7 +515,6 @@ app.post('/api/leaves', (req, res) => {
   res.status(201).json(newLeave);
 });
 
-// Approve / Reject Leave (Admin / Manager / TL Only)
 app.put('/api/leaves/:id', (req, res) => {
   const db = loadDB();
   const leave = db.leaves.find(l => l.id === req.params.id);
@@ -518,7 +530,6 @@ app.put('/api/leaves/:id', (req, res) => {
   res.json(leave);
 });
 
-// Export CSV (Admin / Manager Only)
 app.get('/api/export/csv', (req, res) => {
   const db = loadDB();
   let csv = 'ID,DBS ID,Employee Name,Department,Date,Clock In,Clock Out,Status,Location,Notes\n';

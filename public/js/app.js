@@ -22,8 +22,8 @@ let state = {
 document.addEventListener('DOMContentLoaded', () => {
   initLiveClock();
   initNavigationTabs();
-  
-  // Check if session exists in localStorage
+
+  // Check saved session in localStorage
   const savedUser = localStorage.getItem('pulseattend_user');
   if (savedUser) {
     try {
@@ -33,8 +33,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  updateSessionUI();
-  fetchAllData();
+  // Pre-fetch employees to populate login dropdown on Welcome page
+  fetchEmployees().then(() => {
+    updateScreenView();
+  });
 
   // Default dates for leave form
   const todayStr = new Date().toISOString().split('T')[0];
@@ -45,7 +47,70 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 /* ---------------------------------------------------------
-   1. Live Clock & Date
+   1. Screen View Controller (Welcome vs App Portal)
+   --------------------------------------------------------- */
+function updateScreenView() {
+  const welcomeScreen = document.getElementById('welcomeLoginScreen');
+  const appScreen = document.getElementById('mainAppScreen');
+
+  if (state.currentUser) {
+    // User is logged in -> Show App Portal
+    if (welcomeScreen) welcomeScreen.style.display = 'none';
+    if (appScreen) appScreen.style.display = 'flex';
+
+    updateSessionUI();
+    fetchAllData();
+  } else {
+    // User is NOT logged in -> Show Welcome / Login Screen ONLY
+    if (welcomeScreen) welcomeScreen.style.display = 'flex';
+    if (appScreen) appScreen.style.display = 'none';
+  }
+}
+
+function updateSessionUI() {
+  const sessionBox = document.getElementById('userSessionBox');
+  const btnAddEmpHeader = document.getElementById('btnAddEmpHeader');
+  const adminTabs = document.querySelectorAll('.admin-only-tab');
+  const adminNotes = document.querySelectorAll('.admin-note');
+
+  const user = state.currentUser;
+  if (!user) return;
+
+  if (sessionBox) sessionBox.style.display = 'flex';
+  document.getElementById('headerUserName').textContent = user.name;
+  
+  const initials = getInitials(user.name);
+  const avatarEl = document.getElementById('headerUserAvatar');
+  if (avatarEl) {
+    avatarEl.textContent = initials;
+    avatarEl.style.backgroundColor = user.avatarColor || '#F59E0B';
+  }
+
+  const badge = document.getElementById('headerUserRoleBadge');
+  if (badge) {
+    badge.textContent = user.roleType || 'Employee';
+    if (user.roleType === 'Admin') badge.className = 'badge badge-yellow';
+    else if (user.roleType === 'Manager' || user.roleType === 'Team Lead') badge.className = 'badge badge-green';
+    else badge.className = 'badge badge-gray';
+  }
+
+  const isElevated = (user.roleType === 'Admin' || user.roleType === 'Manager' || user.roleType === 'Team Lead');
+
+  adminTabs.forEach(tab => {
+    tab.style.display = isElevated ? 'inline-flex' : 'none';
+  });
+
+  adminNotes.forEach(note => {
+    note.style.display = user.roleType === 'Admin' ? 'inline' : 'none';
+  });
+
+  if (btnAddEmpHeader) {
+    btnAddEmpHeader.style.display = user.roleType === 'Admin' ? 'inline-flex' : 'none';
+  }
+}
+
+/* ---------------------------------------------------------
+   2. Live Clock & Date
    --------------------------------------------------------- */
 function initLiveClock() {
   const updateClock = () => {
@@ -69,7 +134,7 @@ function initLiveClock() {
 }
 
 /* ---------------------------------------------------------
-   2. Navigation & Tabs
+   3. Navigation & Tabs
    --------------------------------------------------------- */
 function initNavigationTabs() {
   const desktopTabs = document.querySelectorAll('.nav-tab');
@@ -98,57 +163,6 @@ function initNavigationTabs() {
   mobileTabs.forEach(btn => {
     btn.addEventListener('click', () => switchTab(btn.getAttribute('data-tab')));
   });
-}
-
-/* ---------------------------------------------------------
-   3. Session & Permission Guards
-   --------------------------------------------------------- */
-function updateSessionUI() {
-  const sessionBox = document.getElementById('userSessionBox');
-  const btnLoginOpen = document.getElementById('btnLoginOpen');
-  const btnAddEmpHeader = document.getElementById('btnAddEmpHeader');
-  const adminTabs = document.querySelectorAll('.admin-only-tab');
-
-  const user = state.currentUser;
-
-  if (user) {
-    if (sessionBox) sessionBox.style.display = 'flex';
-    if (btnLoginOpen) btnLoginOpen.style.display = 'none';
-
-    document.getElementById('headerUserName').textContent = user.name;
-    const initials = getInitials(user.name);
-    const avatarEl = document.getElementById('headerUserAvatar');
-    if (avatarEl) {
-      avatarEl.textContent = initials;
-      avatarEl.style.backgroundColor = user.avatarColor || '#F59E0B';
-    }
-
-    const badge = document.getElementById('headerUserRoleBadge');
-    if (badge) {
-      badge.textContent = user.roleType || 'Employee';
-      if (user.roleType === 'Admin') badge.className = 'badge badge-yellow';
-      else if (user.roleType === 'Manager' || user.roleType === 'Team Lead') badge.className = 'badge badge-green';
-      else badge.className = 'badge badge-gray';
-    }
-
-    const isElevated = (user.roleType === 'Admin' || user.roleType === 'Manager' || user.roleType === 'Team Lead');
-
-    adminTabs.forEach(tab => {
-      tab.style.display = isElevated ? 'inline-flex' : 'none';
-    });
-
-    if (btnAddEmpHeader) {
-      btnAddEmpHeader.style.display = user.roleType === 'Admin' ? 'inline-flex' : 'none';
-    }
-  } else {
-    if (sessionBox) sessionBox.style.display = 'none';
-    if (btnLoginOpen) btnLoginOpen.style.display = 'inline-flex';
-    if (btnAddEmpHeader) btnAddEmpHeader.style.display = 'none';
-
-    adminTabs.forEach(tab => {
-      tab.style.display = 'none';
-    });
-  }
 }
 
 /* ---------------------------------------------------------
@@ -233,8 +247,9 @@ async function fetchTodayActivity() {
 
   let html = '';
   todayLogs.forEach(log => {
-    const timeIn = new Date(log.clockIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const timeIn = log.clockIn ? new Date(log.clockIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
     const isLate = log.status === 'Late';
+    const isHalfDay = log.status === 'Half Day';
     const isOut = log.status === 'Clocked Out';
 
     let itemClass = 'feed-item';
@@ -243,7 +258,7 @@ async function fetchTodayActivity() {
 
     let badgeHtml = isLate 
       ? '<span class="badge badge-red">Late</span>' 
-      : (isOut ? '<span class="badge badge-gray">Clocked Out</span>' : '<span class="badge badge-green">Present</span>');
+      : (isHalfDay ? '<span class="badge badge-purple">Half Day</span>' : (isOut ? '<span class="badge badge-gray">Clocked Out</span>' : '<span class="badge badge-green">Present</span>'));
 
     html += `
       <div class="${itemClass}">
@@ -263,10 +278,10 @@ async function fetchTodayActivity() {
 }
 
 /* ---------------------------------------------------------
-   5. Render UI Views
+   5. Render UI Views & Admin Controls
    --------------------------------------------------------- */
 function renderStats() {
-  const { totalEmployees, present, late, onLeave, attendanceRate } = state.stats;
+  const { totalEmployees, present, late, halfDay, onLeave, attendanceRate } = state.stats;
 
   if (document.getElementById('statTotalEmployees')) document.getElementById('statTotalEmployees').textContent = totalEmployees || 55;
   if (document.getElementById('statPresentToday')) document.getElementById('statPresentToday').textContent = present || 0;
@@ -287,6 +302,8 @@ function renderRosterGrid() {
     return;
   }
 
+  const isAdmin = state.currentUser && state.currentUser.roleType === 'Admin';
+
   let html = '';
   state.filteredRoster.forEach(emp => {
     const initials = getInitials(emp.name);
@@ -295,19 +312,38 @@ function renderRosterGrid() {
 
     if (emp.status === 'Present') { badgeClass = 'badge-green'; icon = 'fa-circle-check'; }
     else if (emp.status === 'Late') { badgeClass = 'badge-red'; icon = 'fa-triangle-exclamation'; }
+    else if (emp.status === 'Half Day') { badgeClass = 'badge-purple'; icon = 'fa-adjust'; }
     else if (emp.status === 'On Leave') { badgeClass = 'badge-orange'; icon = 'fa-plane-departure'; }
     else if (emp.status === 'Clocked Out') { badgeClass = 'badge-yellow'; icon = 'fa-circle-check'; }
 
     html += `
       <div class="roster-card">
-        <div class="roster-avatar" style="background-color: ${emp.avatarColor || '#F59E0B'};">${initials}</div>
-        <div class="roster-info">
-          <h4>${escapeHTML(emp.name)}</h4>
-          <div class="roster-id">${escapeHTML(emp.id)} • ${escapeHTML(emp.department)}</div>
+        <div class="roster-card-top">
+          <div class="roster-avatar" style="background-color: ${emp.avatarColor || '#F59E0B'};">${initials}</div>
+          <div class="roster-info">
+            <h4>${escapeHTML(emp.name)}</h4>
+            <div class="roster-id">${escapeHTML(emp.id)} • ${escapeHTML(emp.department)}</div>
+          </div>
         </div>
-        <div class="roster-status-badge">
-          <span class="badge ${badgeClass}"><i class="fa-solid ${icon}"></i> ${emp.status}</span>
-          ${emp.timeInfo ? `<div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">${emp.timeInfo}</div>` : ''}
+
+        <div class="roster-card-bottom">
+          <div>
+            <span class="badge ${badgeClass}"><i class="fa-solid ${icon}"></i> ${emp.status}</span>
+            ${emp.timeInfo ? `<span style="font-size:0.75rem; color:var(--text-muted); margin-left:4px;">${emp.timeInfo}</span>` : ''}
+          </div>
+
+          <!-- ADMIN ONLY STATUS MARKER -->
+          ${isAdmin ? `
+            <div>
+              <select class="admin-status-picker" onchange="handleAdminMarkStatus('${emp.id}', this.value)">
+                <option value="">Mark Status...</option>
+                <option value="Present" ${emp.status === 'Present' ? 'selected' : ''}>Present</option>
+                <option value="Absent" ${emp.status === 'Absent' ? 'selected' : ''}>Absent</option>
+                <option value="Half Day" ${emp.status === 'Half Day' ? 'selected' : ''}>Half Day</option>
+                <option value="On Leave" ${emp.status === 'On Leave' ? 'selected' : ''}>On Leave</option>
+              </select>
+            </div>
+          ` : ''}
         </div>
       </div>
     `;
@@ -319,11 +355,13 @@ function renderRosterGrid() {
 function updateRosterCounters() {
   const present = state.todayRoster.filter(r => r.status === 'Present' || r.status === 'Clocked Out').length;
   const late = state.todayRoster.filter(r => r.status === 'Late').length;
+  const halfDay = state.todayRoster.filter(r => r.status === 'Half Day').length;
   const leave = state.todayRoster.filter(r => r.status === 'On Leave').length;
   const absent = state.todayRoster.filter(r => r.status === 'Absent').length;
 
   if (document.getElementById('countPresent')) document.getElementById('countPresent').textContent = present;
   if (document.getElementById('countLate')) document.getElementById('countLate').textContent = late;
+  if (document.getElementById('countHalfDay')) document.getElementById('countHalfDay').textContent = halfDay;
   if (document.getElementById('countLeave')) document.getElementById('countLeave').textContent = leave;
   if (document.getElementById('countAbsent')) document.getElementById('countAbsent').textContent = absent;
 }
@@ -353,25 +391,23 @@ function filterRosterByTag(tag) {
 function populateDropdowns() {
   const kioskSelect = document.getElementById('kioskEmployeeSelect');
   const leaveSelect = document.getElementById('leaveEmployeeSelect');
-  const loginSelect = document.getElementById('loginUserSelect');
+  const welcomeSelect = document.getElementById('welcomeUserSelect');
 
-  let options = '<option value="">-- Choose Name / DBS ID --</option>';
+  let options = '<option value="">-- Select Employee Name / DBS ID --</option>';
   state.employees.forEach(emp => {
     options += `<option value="${emp.id}">${escapeHTML(emp.name)} (${emp.id} - ${emp.department})</option>`;
   });
 
+  if (welcomeSelect) welcomeSelect.innerHTML = options;
+  if (leaveSelect) leaveSelect.innerHTML = options;
+
   if (kioskSelect) {
     kioskSelect.innerHTML = options;
-    if (state.employees.length > 0 && !state.selectedKioskEmployeeId) {
-      // Default to Sagar Alapati if available
-      const sagar = state.employees.find(e => e.id === 'DBS-540');
-      kioskSelect.value = sagar ? sagar.id : state.employees[0].id;
+    if (state.currentUser) {
+      kioskSelect.value = state.currentUser.id;
       syncKioskEmployee();
     }
   }
-
-  if (leaveSelect) leaveSelect.innerHTML = options;
-  if (loginSelect) loginSelect.innerHTML = options;
 }
 
 function syncKioskEmployee() {
@@ -400,7 +436,7 @@ function syncKioskEmployee() {
       statusPill.className = 'badge badge-gray';
       statusPill.textContent = 'Not Clocked In Today';
     } else if (!todayLog.clockOut) {
-      statusPill.className = todayLog.status === 'Late' ? 'badge badge-red' : 'badge badge-green';
+      statusPill.className = todayLog.status === 'Late' ? 'badge badge-red' : (todayLog.status === 'Half Day' ? 'badge badge-purple' : 'badge badge-green');
       statusPill.textContent = `Active (${todayLog.status})`;
     } else {
       statusPill.className = 'badge badge-yellow';
@@ -414,7 +450,7 @@ function renderAttendanceTable() {
   if (!tbody) return;
 
   if (state.filteredLogs.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding: 24px; color:var(--text-muted);">No attendance entries match current filter.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding: 24px; color:var(--text-muted);">No attendance logs found.</td></tr>`;
     return;
   }
 
@@ -425,7 +461,9 @@ function renderAttendanceTable() {
 
     let badgeClass = 'badge-green';
     if (log.status === 'Late') badgeClass = 'badge-red';
+    if (log.status === 'Half Day') badgeClass = 'badge-purple';
     if (log.status === 'Clocked Out') badgeClass = 'badge-yellow';
+    if (log.status === 'Absent') badgeClass = 'badge-gray';
 
     html += `
       <tr>
@@ -467,10 +505,9 @@ function renderStaffGrid() {
           <div class="staff-role">${escapeHTML(emp.id)} • ${escapeHTML(emp.department)}</div>
           <div class="staff-meta"><i class="fa-solid fa-envelope"></i> ${escapeHTML(emp.email)}</div>
           
-          <!-- Role Delegation Control (Admin Only) -->
           ${isAdmin ? `
             <div class="role-assign-box">
-              <label style="font-size:0.75rem; color:var(--text-muted);">Access Level:</label>
+              <label style="font-size:0.75rem; color:var(--text-muted);">Access Role:</label>
               <select class="role-assign-select" onchange="handleGrantRole('${emp.id}', this.value)">
                 <option value="Employee" ${roleType === 'Employee' ? 'selected' : ''}>Employee</option>
                 <option value="Team Lead" ${roleType === 'Team Lead' ? 'selected' : ''}>Team Lead (TL)</option>
@@ -554,16 +591,47 @@ function renderLeavesList() {
 }
 
 /* ---------------------------------------------------------
-   6. Authentication & Role Handlers
+   6. ADMIN MARK ATTENDANCE STATUS HANDLER (Present, Absent, Half Day, On Leave)
    --------------------------------------------------------- */
-async function handleLoginSubmit(e) {
+async function handleAdminMarkStatus(empId, newStatus) {
+  if (!newStatus) return;
+  if (!state.currentUser || state.currentUser.roleType !== 'Admin') {
+    showToast('Admin privilege required to mark employee attendance', 'error');
+    return;
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/attendance/mark`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ employeeId: empId, status: newStatus })
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      showToast(data.error || 'Failed to mark status', 'error');
+      return;
+    }
+
+    showToast(data.message, 'success');
+    await fetchTodayRosterSummary();
+    await fetchStats();
+  } catch (err) {
+    showToast('Error marking attendance status', 'error');
+  }
+}
+
+/* ---------------------------------------------------------
+   7. Login & Authentication Handlers
+   --------------------------------------------------------- */
+async function handleWelcomeLogin(e) {
   e.preventDefault();
 
-  const usernameOrId = document.getElementById('loginUserSelect').value;
-  const password = document.getElementById('loginPassword').value;
+  const usernameOrId = document.getElementById('welcomeUserSelect').value;
+  const password = document.getElementById('welcomePassword').value;
 
   if (!usernameOrId) {
-    showToast('Please select your name from dropdown', 'error');
+    showToast('Please select an employee name', 'error');
     return;
   }
 
@@ -583,20 +651,16 @@ async function handleLoginSubmit(e) {
     state.currentUser = data.user;
     localStorage.setItem('pulseattend_user', JSON.stringify(data.user));
 
-    updateSessionUI();
-    closeModal('login-modal');
-    document.getElementById('loginForm').reset();
     showToast(`Welcome ${data.user.name}! Logged in as ${data.user.roleType}`, 'success');
-
-    await fetchAllData();
+    updateScreenView();
   } catch (err) {
     showToast('Network error during login', 'error');
   }
 }
 
-function quickFillLogin(empId, pass) {
-  const select = document.getElementById('loginUserSelect');
-  const passInput = document.getElementById('loginPassword');
+function quickFillWelcome(empId, pass) {
+  const select = document.getElementById('welcomeUserSelect');
+  const passInput = document.getElementById('welcomePassword');
   if (select) select.value = empId;
   if (passInput) passInput.value = pass;
 }
@@ -604,9 +668,8 @@ function quickFillLogin(empId, pass) {
 function handleLogout() {
   state.currentUser = null;
   localStorage.removeItem('pulseattend_user');
-  updateSessionUI();
+  updateScreenView();
   showToast('Logged out successfully', 'success');
-  fetchAllData();
 }
 
 async function handleGrantRole(empId, newRoleType) {
@@ -636,7 +699,7 @@ async function handleGrantRole(empId, newRoleType) {
 }
 
 /* ---------------------------------------------------------
-   7. Clock In / Out & Forms Handlers
+   8. Clock In / Out & Forms Handlers
    --------------------------------------------------------- */
 async function handleKioskClockIn() {
   const empId = document.getElementById('kioskEmployeeSelect').value;
@@ -798,7 +861,7 @@ async function handleUpdateLeave(leaveId, newStatus) {
 }
 
 /* ---------------------------------------------------------
-   8. Logs Filtering & CSV Export
+   9. Logs Filtering & CSV Export
    --------------------------------------------------------- */
 function applyLogFilters() {
   const search = document.getElementById('searchLogInput').value.toLowerCase();
@@ -837,7 +900,7 @@ function downloadCSVReport() {
 }
 
 /* ---------------------------------------------------------
-   9. Modal & Utility Helpers
+   10. Modal & Utility Helpers
    --------------------------------------------------------- */
 function openModal(modalId) {
   const modal = document.getElementById(modalId);
