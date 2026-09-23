@@ -70,7 +70,7 @@ const RAW_STAFF_LIST = [
   { id: 'DBS-306', name: 'Rajesh Dhabbakuti', department: 'Operations' },
   { id: 'DBS-2661', name: 'Pendyala Venkata Ramesh', department: 'Operations' },
   { id: 'DBS-2617', name: 'Karthik Dividevara', department: 'Engineering' },
-  { id: 'DBS-540', name: 'Sagar Alapati', department: 'Executive Management', roleType: 'Admin' },
+  { id: 'DBS-540', name: 'Sagar Alapati', department: 'Executive Management', roleType: 'Admin', phone: '9704225352' },
   { id: 'DBS-25158', name: 'Atla Naga Venu', department: 'Operations' },
   { id: 'DBS-550', name: 'Prathyush Raj Bontha', department: 'Engineering' },
   { id: 'DBS-25138', name: 'Surendra Gudvalli', department: 'Engineering' },
@@ -86,14 +86,15 @@ function getInitialData() {
     return {
       id: item.id,
       name: item.name,
+      phone: item.phone || '',
       department: item.department || 'Operations',
       role: isAdmin ? 'System Administrator' : 'Team Member',
       roleType: isAdmin ? 'Admin' : (item.roleType || 'Employee'),
       email: `${item.name.toLowerCase().replace(/[^a-z0-9]/g, '.')}@dbs.com`,
       shift: '09:00 - 17:00',
       status: 'Active',
-      // Strict individual default password: For Sagar Alapati -> 'admin123', for employees -> their DBS ID (e.g. 'DBS-25132')
-      password: isAdmin ? 'admin123' : item.id,
+      // Admin password: '9640000890', Employee password: their DBS ID (e.g. 'DBS-25132')
+      password: isAdmin ? '9640000890' : item.id,
       avatarColor: avatarColors[index % avatarColors.length]
     };
   });
@@ -155,7 +156,10 @@ function loadDB() {
     const sagar = db.employees.find(e => e.id === 'DBS-540' || e.name.toLowerCase().includes('sagar alapati'));
     if (sagar) {
       sagar.roleType = 'Admin';
+      sagar.phone = '9704225352';
+      sagar.password = '9640000890'; // Strictly updated Admin password
     }
+    saveDB(db);
     return db;
   } catch (err) {
     const initial = getInitialData();
@@ -168,31 +172,30 @@ function saveDB(data) {
   fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), 'utf8');
 }
 
-// ---------------------------------------------------------
-// STRICT REAL AUTHENTICATION & REST ENDPOINTS
-// ---------------------------------------------------------
+// REST API Endpoints
 
-// Real Login Endpoint (Strict Password Verification)
+// Login Endpoint
 app.post('/api/auth/login', (req, res) => {
   const db = loadDB();
   const { usernameOrId, password } = req.body;
 
   if (!usernameOrId || !password) {
-    return res.status(400).json({ error: 'Employee ID/Name and Password are required' });
+    return res.status(400).json({ error: 'Username / Phone / Employee ID and Password are required' });
   }
 
   const query = usernameOrId.trim().toLowerCase();
   const user = db.employees.find(e => 
     e.id.toLowerCase() === query || 
     e.name.toLowerCase() === query ||
+    (e.phone && e.phone === query) ||
     e.name.toLowerCase().includes(query)
   );
 
   if (!user) {
-    return res.status(401).json({ error: 'Invalid Employee ID or Name' });
+    return res.status(401).json({ error: 'Invalid Employee Phone / ID or Name' });
   }
 
-  // STRICT REAL AUTHENTICATION: Submitted password MUST match user's stored password exactly!
+  // Strict Password Check
   if (user.password !== password.trim()) {
     return res.status(401).json({ error: 'Incorrect Password. Please check your credentials.' });
   }
@@ -202,6 +205,7 @@ app.post('/api/auth/login', (req, res) => {
     user: {
       id: user.id,
       name: user.name,
+      phone: user.phone || '',
       department: user.department,
       role: user.role,
       roleType: user.roleType || 'Employee',
@@ -210,7 +214,6 @@ app.post('/api/auth/login', (req, res) => {
   });
 });
 
-// Update / Reset Password Endpoint
 app.put('/api/employees/:id/password', (req, res) => {
   const db = loadDB();
   const { id } = req.params;
@@ -221,9 +224,7 @@ app.put('/api/employees/:id/password', (req, res) => {
   }
 
   const user = db.employees.find(e => e.id === id);
-  if (!user) {
-    return res.status(404).json({ error: 'Employee not found' });
-  }
+  if (!user) return res.status(404).json({ error: 'Employee not found' });
 
   user.password = newPassword.trim();
   saveDB(db);
@@ -233,14 +234,13 @@ app.put('/api/employees/:id/password', (req, res) => {
 
 app.get('/api/employees', (req, res) => {
   const db = loadDB();
-  // Sanitize password field from public employee list response for security
   const safeEmployees = db.employees.map(({ password, ...emp }) => emp);
   res.json(safeEmployees);
 });
 
 app.post('/api/employees', (req, res) => {
   const db = loadDB();
-  const { name, department, role, roleType, email, shift, password } = req.body;
+  const { name, department, role, roleType, email, shift, password, phone } = req.body;
   
   if (!name || !department) {
     return res.status(400).json({ error: 'Name and Department are required' });
@@ -252,13 +252,14 @@ app.post('/api/employees', (req, res) => {
   const newEmp = {
     id: newId,
     name,
+    phone: phone || '',
     department,
     role: role || 'Team Member',
     roleType: roleType || 'Employee',
     email: email || `${name.toLowerCase().replace(/\s+/g, '.')}@dbs.com`,
     shift: shift || '09:00 - 17:00',
     status: 'Active',
-    password: password || newId, // Set password strictly to new ID or custom
+    password: password || newId,
     avatarColor: colors[Math.floor(Math.random() * colors.length)]
   };
 
@@ -269,7 +270,6 @@ app.post('/api/employees', (req, res) => {
   res.status(201).json(safeEmp);
 });
 
-// Admin Role Delegation
 app.put('/api/employees/:id/role', (req, res) => {
   const db = loadDB();
   const emp = db.employees.find(e => e.id === req.params.id);
@@ -286,7 +286,6 @@ app.put('/api/employees/:id/role', (req, res) => {
   res.json({ success: true, message: `Role updated to ${roleType}`, employee: emp });
 });
 
-// ADMIN ONLY MARK ATTENDANCE (Present, Absent, Half Day, On Leave)
 app.post('/api/attendance/mark', (req, res) => {
   const db = loadDB();
   const { employeeId, status, date, notes } = req.body;
@@ -360,7 +359,6 @@ app.get('/api/attendance', (req, res) => {
   res.json(logs);
 });
 
-// Present / Absent Today Roster Summary
 app.get('/api/attendance/today-summary', (req, res) => {
   const db = loadDB();
   const todayStr = new Date().toISOString().split('T')[0];
@@ -573,8 +571,7 @@ app.get('/api/export/csv', (req, res) => {
 app.listen(PORT, () => {
   console.log(`====================================================`);
   console.log(`🚀 PulseAttend Portal running on port ${PORT}`);
-  console.log(`🔒 Strict Real Authentication Enabled`);
-  console.log(`👑 Sagar Alapati (DBS-540) Admin Password: admin123`);
-  console.log(`👤 Employees Default Password: [Their DBS ID] (e.g. DBS-25132)`);
+  console.log(`👑 Admin Phone/Username: 9704225352`);
+  console.log(`🔒 Admin Password: 9640000890`);
   console.log(`====================================================`);
 });

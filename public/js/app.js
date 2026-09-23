@@ -7,7 +7,7 @@ const API_BASE = '/api';
 
 // Global Application State
 let state = {
-  currentUser: null, // { id, name, department, role, roleType, avatarColor }
+  currentUser: null,
   employees: [],
   todayRoster: [],
   filteredRoster: [],
@@ -33,12 +33,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Pre-fetch employees to populate login dropdown on Welcome page
   fetchEmployees().then(() => {
     updateScreenView();
   });
 
-  // Default dates for leave form
   const todayStr = new Date().toISOString().split('T')[0];
   const startDateInput = document.getElementById('leaveStartDate');
   const endDateInput = document.getElementById('leaveEndDate');
@@ -54,14 +52,12 @@ function updateScreenView() {
   const appScreen = document.getElementById('mainAppScreen');
 
   if (state.currentUser) {
-    // User is logged in -> Show App Portal
     if (welcomeScreen) welcomeScreen.style.display = 'none';
     if (appScreen) appScreen.style.display = 'flex';
 
     updateSessionUI();
     fetchAllData();
   } else {
-    // User is NOT logged in -> Show Welcome / Login Screen ONLY
     if (welcomeScreen) welcomeScreen.style.display = 'flex';
     if (appScreen) appScreen.style.display = 'none';
   }
@@ -332,7 +328,6 @@ function renderRosterGrid() {
             ${emp.timeInfo ? `<span style="font-size:0.75rem; color:var(--text-muted); margin-left:4px;">${emp.timeInfo}</span>` : ''}
           </div>
 
-          <!-- ADMIN ONLY STATUS MARKER -->
           ${isAdmin ? `
             <div>
               <select class="admin-status-picker" onchange="handleAdminMarkStatus('${emp.id}', this.value)">
@@ -393,7 +388,7 @@ function populateDropdowns() {
   const leaveSelect = document.getElementById('leaveEmployeeSelect');
   const welcomeSelect = document.getElementById('welcomeUserSelect');
 
-  let options = '<option value="">-- Select Employee Name / DBS ID --</option>';
+  let options = '<option value="">-- Choose Name from Dropdown --</option>';
   state.employees.forEach(emp => {
     options += `<option value="${emp.id}">${escapeHTML(emp.name)} (${emp.id} - ${emp.department})</option>`;
   });
@@ -407,6 +402,13 @@ function populateDropdowns() {
       kioskSelect.value = state.currentUser.id;
       syncKioskEmployee();
     }
+  }
+}
+
+function syncWelcomeInput(val) {
+  const input = document.getElementById('welcomeUserInput');
+  if (input && val) {
+    input.value = val;
   }
 }
 
@@ -591,7 +593,7 @@ function renderLeavesList() {
 }
 
 /* ---------------------------------------------------------
-   6. ADMIN MARK ATTENDANCE STATUS HANDLER (Present, Absent, Half Day, On Leave)
+   6. ADMIN MARK ATTENDANCE STATUS HANDLER
    --------------------------------------------------------- */
 async function handleAdminMarkStatus(empId, newStatus) {
   if (!newStatus) return;
@@ -627,11 +629,11 @@ async function handleAdminMarkStatus(empId, newStatus) {
 async function handleWelcomeLogin(e) {
   e.preventDefault();
 
-  const usernameOrId = document.getElementById('welcomeUserSelect').value;
+  const userInput = document.getElementById('welcomeUserInput').value;
   const password = document.getElementById('welcomePassword').value;
 
-  if (!usernameOrId) {
-    showToast('Please select an employee name', 'error');
+  if (!userInput) {
+    showToast('Please enter your Phone, DBS ID, or select Name', 'error');
     return;
   }
 
@@ -639,7 +641,7 @@ async function handleWelcomeLogin(e) {
     const res = await fetch(`${API_BASE}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ usernameOrId, password })
+      body: JSON.stringify({ usernameOrId: userInput, password })
     });
 
     const data = await res.json();
@@ -656,13 +658,6 @@ async function handleWelcomeLogin(e) {
   } catch (err) {
     showToast('Network error during login', 'error');
   }
-}
-
-function quickFillWelcome(empId, pass) {
-  const select = document.getElementById('welcomeUserSelect');
-  const passInput = document.getElementById('welcomePassword');
-  if (select) select.value = empId;
-  if (passInput) passInput.value = pass;
 }
 
 function handleLogout() {
