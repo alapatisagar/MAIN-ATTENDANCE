@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PulseAttend - Online Employee Attendance System</title>
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- Top Announcement / Deploy Banner -->
+  <div class="deploy-banner">
+    <span><i class="fa-solid fa-cloud-arrow-up"></i> Ready for Online Deployment anywhere via <strong>Render.com</strong></span>
+    <a href="#render-guide-modal" onclick="openModal('render-guide-modal')" class="btn-banner"><i class="fa-solid fa-book-open"></i> Deployment Guide</a>
+  </div>
+
+  <!-- Main Navigation Header -->
+  <header class="navbar">
+    <div class="nav-container">
+      <div class="brand">
+        <div class="brand-logo">
+          <i class="fa-solid fa-user-check"></i>
+        </div>
+        <div class="brand-text">
+          <h1>Pulse<span>Attend</span></h1>
+          <p class="tagline">Attendance & Workforce Portal</p>
+        </div>
+      </div>
+
+      <!-- Center Nav Tabs for Desktop -->
+      <nav class="nav-links">
+        <button class="nav-tab active" data-tab="dashboard-tab"><i class="fa-solid fa-chart-pie"></i> Dashboard</button>
+        <button class="nav-tab" data-tab="clockin-tab"><i class="fa-solid fa-business-time"></i> Clock In / Out</button>
+        <button class="nav-tab" data-tab="logs-tab"><i class="fa-solid fa-list-check"></i> Attendance Logs</button>
+        <button class="nav-tab" data-tab="employees-tab"><i class="fa-solid fa-users"></i> Staff Roster</button>
+        <button class="nav-tab" data-tab="leaves-tab"><i class="fa-solid fa-calendar-minus"></i> Leaves</button>
+      </nav>
+
+      <!-- Right Header Actions -->
+      <div class="nav-actions">
+        <!-- Role Switcher -->
+        <div class="role-selector">
+          <label for="roleToggle"><i class="fa-solid fa-user-shield"></i> Mode:</label>
+          <select id="roleToggle" class="role-dropdown" onchange="toggleUserRole()">
+            <option value="employee">Employee View</option>
+            <option value="admin" selected>Admin / HR View</option>
+          </select>
+        </div>
+
+        <button class="btn-primary-yellow" onclick="openModal('add-employee-modal')">
+          <i class="fa-solid fa-user-plus"></i> <span class="hide-mobile">Add Employee</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Body Layout -->
+  <main class="main-content">
+    <div class="container">
+
+      <!-- Real-Time Date & Time Clock Header Card -->
+      <section class="clock-banner-card">
+        <div class="clock-banner-content">
+          <div class="live-clock-wrapper">
+            <div class="live-time" id="liveTime">00:00:00 AM</div>
+            <div class="live-date" id="liveDate">Thursday, September 24, 2026</div>
+          </div>
+          <div class="clock-quick-stats">
+            <div class="quick-pill yellow-pill">
+              <i class="fa-solid fa-sun"></i> Shift Hours: <strong>09:00 AM - 05:00 PM</strong>
+            </div>
+            <div class="quick-pill red-pill">
+              <i class="fa-solid fa-clock-rotate-left"></i> Cutoff: <strong>09:15 AM (Late Penalty)</strong>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- KPI Summary Cards (Red & Yellow High-Impact Theme) -->
+      <section class="stats-grid">
+        <div class="stat-card card-yellow">
+          <div class="stat-header">
+            <span class="stat-label">Total Staff</span>
+            <div class="stat-icon yellow-icon"><i class="fa-solid fa-users-gear"></i></div>
+          </div>
+          <div class="stat-value" id="statTotalEmployees">0</div>
+          <div class="stat-subtext">Registered Employees</div>
+        </div>
+
+        <div class="stat-card card-green">
+          <div class="stat-header">
+            <span class="stat-label">Present Today</span>
+            <div class="stat-icon green-icon"><i class="fa-solid fa-circle-check"></i></div>
+          </div>
+          <div class="stat-value" id="statPresentToday">0</div>
+          <div class="stat-subtext">On-time Clock-ins</div>
+        </div>
+
+        <div class="stat-card card-red">
+          <div class="stat-header">
+            <span class="stat-label">Late Arrival</span>
+            <div class="stat-icon red-icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
+          </div>
+          <div class="stat-value" id="statLateToday">0</div>
+          <div class="stat-subtext">After 09:15 AM grace</div>
+        </div>
+
+        <div class="stat-card card-orange">
+          <div class="stat-header">
+            <span class="stat-label">On Leave</span>
+            <div class="stat-icon orange-icon"><i class="fa-solid fa-plane-departure"></i></div>
+          </div>
+          <div class="stat-value" id="statOnLeave">0</div>
+          <div class="stat-subtext">Approved Leaves</div>
+        </div>
+
+        <div class="stat-card card-yellow-dark">
+          <div class="stat-header">
+            <span class="stat-label">Attendance Rate</span>
+            <div class="stat-icon yellow-dark-icon"><i class="fa-solid fa-chart-line"></i></div>
+          </div>
+          <div class="stat-value" id="statAttendanceRate">0%</div>
+          <div class="progress-bar-container">
+            <div class="progress-bar" id="statProgressBar" style="width: 0%;"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB CONTENTS -->
+
+      <!-- TAB 1: DASHBOARD -->
+      <div id="dashboard-tab" class="tab-pane active">
+        <div class="grid-2col">
+          <!-- Quick Clock In Action Widget -->
+          <div class="panel-card highlight-border-yellow">
+            <div class="panel-header">
+              <h3><i class="fa-solid fa-fingerprint text-yellow"></i> Quick Clock-in Terminal</h3>
+              <span class="badge badge-yellow">Self-Service</span>
+            </div>
+            <div class="clockin-widget-body">
+              <div class="form-group">
+                <label for="terminalEmployeeSelect"><i class="fa-solid fa-user"></i> Select Your Name / ID:</label>
+                <select id="terminalEmployeeSelect" class="form-control-lg" onchange="updateTerminalEmployeeDetails()">
+                  <!-- Populated via JS -->
+                </select>
+              </div>
+
+              <!-- Employee Selected Info Card -->
+              <div class="emp-info-card" id="terminalEmpCard">
+                <div class="emp-avatar" id="terminalEmpAvatar">AM</div>
+                <div class="emp-details">
+                  <h4 id="terminalEmpName">Loading...</h4>
+                  <p id="terminalEmpDeptRole">Engineering • Senior Developer</p>
+                </div>
+                <div class="emp-current-status" id="terminalEmpStatusBadge">
+                  <span class="badge badge-gray">Not Clocked In</span>
+                </div>
+              </div>
+
+              <!-- Terminal Inputs -->
+              <div class="form-row">
+                <div class="form-group col-6">
+                  <label for="clockinLocation"><i class="fa-solid fa-location-dot"></i> Work Location:</label>
+                  <select id="clockinLocation" class="form-control">
+                    <option value="HQ Office">HQ Office</option>
+                    <option value="Remote (Home)">Remote (Home)</option>
+                    <option value="Client Site">Client Site / Field</option>
+                  </select>
+                </div>
+                <div class="form-group col-6">
+                  <label for="clockinNotes"><i class="fa-solid fa-comment-dots"></i> Daily Note / Reason:</label>
+                  <input type="text" id="clockinNotes" class="form-control" placeholder="Optional note...">
+                </div>
+              </div>
+
+              <!-- Action Buttons (Yellow Clock In / Red Clock Out) -->
+              <div class="action-btn-group">
+                <button id="btnClockIn" class="btn-action btn-clockin" onclick="handleClockIn()">
+                  <i class="fa-solid fa-right-to-bracket"></i> Clock In Now
+                </button>
+                <button id="btnClockOut" class="btn-action btn-clockout" onclick="handleClockOut()">
+                  <i class="fa-solid fa-right-from-bracket"></i> Clock Out Now
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Live Today Activity Feed -->
+          <div class="panel-card highlight-border-red">
+            <div class="panel-header">
+              <h3><i class="fa-solid fa-wave-square text-red"></i> Today's Live Clock Feed</h3>
+              <button class="btn-sm btn-ghost" onclick="fetchTodayActivity()"><i class="fa-solid fa-rotate"></i> Refresh</button>
+            </div>
+            <div class="activity-feed-wrapper" id="activityFeedList">
+              <!-- Dynamic activity items -->
+              <div class="feed-empty"><i class="fa-solid fa-circle-notch fa-spin"></i> Loading live feed...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 2: CLOCK IN / OUT (Dedicated Standalone Screen) -->
+      <div id="clockin-tab" class="tab-pane">
+        <div class="panel-card standalone-clock-card">
+          <div class="panel-header">
+            <h2><i class="fa-solid fa-stopwatch text-yellow"></i> Online Attendance Check-in Terminal</h2>
+            <p class="subtitle">Use this check-in kiosk anywhere from mobile phone or desktop laptop.</p>
+          </div>
+          <div class="kiosk-grid">
+            <div class="kiosk-left">
+              <div class="kiosk-clock">
+                <div id="kioskTime" class="kiosk-time-display">00:00:00</div>
+                <div id="kioskDate" class="kiosk-date-display">Date</div>
+              </div>
+              <div class="kiosk-instructions">
+                <div class="inst-step"><span class="step-num">1</span> Choose your name from the dropdown.</div>
+                <div class="inst-step"><span class="step-num">2</span> Verify work location tag.</div>
+                <div class="inst-step"><span class="step-num">3</span> Tap <strong>Clock In</strong> at start or <strong>Clock Out</strong> at end of shift.</div>
+              </div>
+            </div>
+
+            <div class="kiosk-right">
+              <form id="kioskForm" onsubmit="return false;">
+                <div class="form-group">
+                  <label class="form-label-lg"><i class="fa-solid fa-user-tie text-yellow"></i> Select Employee Name:</label>
+                  <select id="kioskEmployeeSelect" class="form-control-lg" onchange="syncKioskEmployee()">
+                    <!-- Populated via JS -->
+                  </select>
+                </div>
+
+                <div class="kiosk-status-box" id="kioskStatusBox">
+                  <div class="kiosk-avatar" id="kioskAvatar">--</div>
+                  <div class="kiosk-info">
+                    <h4 id="kioskEmpName">Select Employee</h4>
+                    <span id="kioskStatusPill" class="badge badge-gray">Status Unknown</span>
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label><i class="fa-solid fa-building"></i> Location:</label>
+                  <select id="kioskLocation" class="form-control">
+                    <option value="HQ Office">HQ Office</option>
+                    <option value="Remote (Home)">Remote (Home)</option>
+                    <option value="Client Site">Client Site / Field</option>
+                  </select>
+                </div>
+
+                <div class="form-group">
+                  <label><i class="fa-solid fa-pencil"></i> Work Notes / Late Reason:</label>
+                  <input type="text" id="kioskNotes" class="form-control" placeholder="e.g. Working on Project X / Traffic issue">
+                </div>
+
+                <div class="kiosk-buttons">
+                  <button type="button" class="btn-clockin-lg" onclick="handleKioskClockIn()">
+                    <i class="fa-solid fa-person-circle-check"></i> CLOCK IN
+                  </button>
+                  <button type="button" class="btn-clockout-lg" onclick="handleKioskClockOut()">
+                    <i class="fa-solid fa-person-circle-minus"></i> CLOCK OUT
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 3: ATTENDANCE LOGS & REPORTS -->
+      <div id="logs-tab" class="tab-pane">
+        <div class="panel-card">
+          <div class="panel-header header-with-actions">
+            <div>
+              <h3><i class="fa-solid fa-clipboard-list text-yellow"></i> Complete Attendance Log Records</h3>
+              <p class="subtitle">Search, filter, and export company attendance history.</p>
+            </div>
+            <div class="header-btns">
+              <button class="btn-export-csv" onclick="downloadCSVReport()">
+                <i class="fa-solid fa-file-csv"></i> Export CSV Report
+              </button>
+            </div>
+          </div>
+
+          <!-- Filter Toolbar -->
+          <div class="filter-bar">
+            <div class="filter-item search-box">
+              <i class="fa-solid fa-magnifying-glass search-icon"></i>
+              <input type="text" id="searchLogInput" placeholder="Search by name, ID, or notes..." oninput="applyLogFilters()">
+            </div>
+
+            <div class="filter-item">
+              <label for="filterDate">Date:</label>
+              <input type="date" id="filterDate" onchange="applyLogFilters()">
+            </div>
+
+            <div class="filter-item">
+              <label for="filterDepartment">Department:</label>
+              <select id="filterDepartment" onchange="applyLogFilters()">
+                <option value="">All Departments</option>
+                <option value="Engineering">Engineering</option>
+                <option value="Design">Design</option>
+                <option value="HR">HR</option>
+                <option value="Sales">Sales</option>
+                <option value="Support">Support</option>
+              </select>
+            </div>
+
+            <div class="filter-item">
+              <label for="filterStatus">Status:</label>
+              <select id="filterStatus" onchange="applyLogFilters()">
+                <option value="">All Statuses</option>
+                <option value="Present">Present</option>
+                <option value="Late">Late</option>
+                <option value="Clocked Out">Clocked Out</option>
+              </select>
+            </div>
+
+            <button class="btn-sm btn-outline-yellow" onclick="resetLogFilters()"><i class="fa-solid fa-rotate-left"></i> Reset</button>
+          </div>
+
+          <!-- Attendance Table -->
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Employee</th>
+                  <th>Department</th>
+                  <th>Date</th>
+                  <th>Clock In</th>
+                  <th>Clock Out</th>
+                  <th>Status</th>
+                  <th>Location</th>
+                  <th>Notes</th>
+                </tr>
+              </thead>
+              <tbody id="attendanceTableBody">
+                <!-- Populated via JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 4: EMPLOYEES STAFF ROSTER -->
+      <div id="employees-tab" class="tab-pane">
+        <div class="panel-card">
+          <div class="panel-header header-with-actions">
+            <div>
+              <h3><i class="fa-solid fa-users text-red"></i> Staff Directory & Profiles</h3>
+              <p class="subtitle">Manage active workforce employees and role details.</p>
+            </div>
+            <button class="btn-primary-yellow" onclick="openModal('add-employee-modal')">
+              <i class="fa-solid fa-plus"></i> Register Employee
+            </button>
+          </div>
+
+          <!-- Staff Cards Grid -->
+          <div class="staff-grid" id="staffGrid">
+            <!-- Populated via JS -->
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 5: LEAVES & ABSENCE TRACKER -->
+      <div id="leaves-tab" class="tab-pane">
+        <div class="grid-2col">
+          <!-- Request Leave Form -->
+          <div class="panel-card">
+            <div class="panel-header">
+              <h3><i class="fa-solid fa-paper-plane text-yellow"></i> Submit Leave Request</h3>
+            </div>
+            <form id="leaveRequestForm" onsubmit="handleLeaveSubmit(event)">
+              <div class="form-group">
+                <label for="leaveEmployeeSelect">Employee Name:</label>
+                <select id="leaveEmployeeSelect" class="form-control" required>
+                  <!-- Populated via JS -->
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label for="leaveType">Leave Type:</label>
+                <select id="leaveType" class="form-control" required>
+                  <option value="Casual Leave">Casual Leave</option>
+                  <option value="Sick Leave">Sick Leave</option>
+                  <option value="Annual Leave">Annual Leave</option>
+                  <option value="Unpaid Leave">Unpaid Leave</option>
+                </select>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group col-6">
+                  <label for="leaveStartDate">Start Date:</label>
+                  <input type="date" id="leaveStartDate" class="form-control" required>
+                </div>
+                <div class="form-group col-6">
+                  <label for="leaveEndDate">End Date:</label>
+                  <input type="date" id="leaveEndDate" class="form-control" required>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="leaveReason">Reason for Leave:</label>
+                <textarea id="leaveReason" class="form-control" rows="3" placeholder="Briefly state reason..." required></textarea>
+              </div>
+
+              <button type="submit" class="btn-primary-red w-100">
+                <i class="fa-solid fa-paper-plane"></i> Submit Application
+              </button>
+            </form>
+          </div>
+
+          <!-- Leave Requests List (Admin Approval Panel) -->
+          <div class="panel-card">
+            <div class="panel-header">
+              <h3><i class="fa-solid fa-folder-open text-red"></i> Leave Applications</h3>
+              <span class="badge badge-red" id="pendingLeaveCount">0 Pending</span>
+            </div>
+            <div class="leave-list" id="leaveApplicationsList">
+              <!-- Populated via JS -->
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- Mobile Bottom Action Navigation Bar -->
+  <nav class="mobile-bottom-nav">
+    <button class="mobile-nav-btn active" data-tab="dashboard-tab">
+      <i class="fa-solid fa-chart-pie"></i>
+      <span>Dashboard</span>
+    </button>
+    <button class="mobile-nav-btn" data-tab="clockin-tab">
+      <i class="fa-solid fa-stopwatch"></i>
+      <span>Clock In</span>
+    </button>
+    <button class="mobile-nav-btn" data-tab="logs-tab">
+      <i class="fa-solid fa-list-check"></i>
+      <span>Logs</span>
+    </button>
+    <button class="mobile-nav-btn" data-tab="employees-tab">
+      <i class="fa-solid fa-users"></i>
+      <span>Staff</span>
+    </button>
+    <button class="mobile-nav-btn" data-tab="leaves-tab">
+      <i class="fa-solid fa-plane-departure"></i>
+      <span>Leaves</span>
+    </button>
+  </nav>
+
+  <!-- MODAL 1: ADD EMPLOYEE MODAL -->
+  <div class="modal-overlay" id="add-employee-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3><i class="fa-solid fa-user-plus text-yellow"></i> Add New Employee Profile</h3>
+        <button class="modal-close" onclick="closeModal('add-employee-modal')">&times;</button>
+      </div>
+      <form id="addEmployeeForm" onsubmit="handleAddEmployee(event)">
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="newEmpName">Full Name *</label>
+            <input type="text" id="newEmpName" class="form-control" placeholder="e.g. Michael Scott" required>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group col-6">
+              <label for="newEmpDept">Department *</label>
+              <select id="newEmpDept" class="form-control" required>
+                <option value="Engineering">Engineering</option>
+                <option value="Design">Design</option>
+                <option value="HR">HR</option>
+                <option value="Sales">Sales</option>
+                <option value="Support">Support</option>
+                <option value="Operations">Operations</option>
+              </select>
+            </div>
+            <div class="form-group col-6">
+              <label for="newEmpRole">Job Role *</label>
+              <input type="text" id="newEmpRole" class="form-control" placeholder="e.g. Manager / Developer" required>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group col-6">
+              <label for="newEmpEmail">Email Address</label>
+              <input type="email" id="newEmpEmail" class="form-control" placeholder="name@company.com">
+            </div>
+            <div class="form-group col-6">
+              <label for="newEmpShift">Shift Schedule</label>
+              <input type="text" id="newEmpShift" class="form-control" value="09:00 - 17:00">
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-ghost" onclick="closeModal('add-employee-modal')">Cancel</button>
+          <button type="submit" class="btn-primary-yellow"><i class="fa-solid fa-save"></i> Save Employee</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL 2: RENDER DEPLOYMENT GUIDE MODAL -->
+  <div class="modal-overlay" id="render-guide-modal">
+    <div class="modal-card modal-lg">
+      <div class="modal-header">
+        <h3><i class="fa-solid fa-cloud-arrow-up text-red"></i> How to Deploy Online Anywhere on Render.com</h3>
+        <button class="modal-close" onclick="closeModal('render-guide-modal')">&times;</button>
+      </div>
+      <div class="modal-body markdown-style">
+        <p>This project is 100% cloud-ready with zero external database dependencies. Deploy online for free in under 2 minutes!</p>
+        
+        <ol class="deploy-steps">
+          <li>
+            <strong>1. Push to GitHub</strong>
+            <p>Push this codebase folder to your GitHub repository.</p>
+          </li>
+          <li>
+            <strong>2. Log into Render.com</strong>
+            <p>Sign up/Login at <a href="https://render.com" target="_blank" rel="noopener">Render.com</a> and click <em>New +</em> &rarr; <em>Web Service</em>.</p>
+          </li>
+          <li>
+            <strong>3. Connect Repository</strong>
+            <p>Select your GitHub repository. Render will automatically detect <code>render.yaml</code> or auto-fill configurations:</p>
+            <ul>
+              <li><strong>Runtime:</strong> Node</li>
+              <li><strong>Build Command:</strong> <code>npm install</code></li>
+              <li><strong>Start Command:</strong> <code>npm start</code></li>
+            </ul>
+          </li>
+          <li>
+            <strong>4. Click "Create Web Service"</strong>
+            <p>Render will build and deploy your live HTTPS link (e.g. <code>https://employee-attendance-app.onrender.com</code>) accessible from any mobile phone or laptop!</p>
+          </li>
+        </ol>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-primary-red" onclick="closeModal('render-guide-modal')">Got it!</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Notification Toast Container -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <script src="js/app.js"></script>
+</body>
+</html>
