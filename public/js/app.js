@@ -658,9 +658,11 @@ async function handleWelcomeLogin(e) {
     // CHECK IF ADMIN SMS 2FA IS REQUIRED
     if (data.requires2FA) {
       state.pending2FAChallengeId = data.challengeId;
+      const otpInput = document.getElementById('otpCodeInput');
+      if (otpInput) otpInput.value = '';
       openModal('2fa-otp-modal');
 
-      showToast(`📲 Admin SMS 2FA OTP sent! (Code: ${data.testOtp})`, 'success');
+      showToast(`📲 Admin 2FA SMS code sent to +91 ${data.phone || '9704225352'}. Check your mobile!`, 'success');
       return;
     }
 

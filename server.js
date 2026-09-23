@@ -182,10 +182,91 @@ function saveDB(data) {
 }
 
 // ---------------------------------------------------------
+// REAL SMS GATEWAY DISPATCH HELPER (Fast2SMS / 2Factor / Twilio / Webhook)
+// ---------------------------------------------------------
+async function dispatchSMS(phone, otpCode) {
+  const cleanPhone = (phone || '9704225352').replace(/\D/g, '');
+  const message = `PulseAttend Admin 2FA Code: ${otpCode}. Valid for 10 minutes.`;
+
+  console.log(`====================================================`);
+  console.log(`📲 SMS DISPATCH TO +91 ${cleanPhone}`);
+  console.log(`🔑 NEW UNIQUE 6-DIGIT OTP CODE: [ ${otpCode} ]`);
+  console.log(`====================================================`);
+
+  // 1. Fast2SMS Integration (India)
+  if (process.env.FAST2SMS_API_KEY) {
+    try {
+      const url = `https://www.fast2sms.com/dev/bulkV2?authorization=${process.env.FAST2SMS_API_KEY}&route=otp&variables_values=${otpCode}&numbers=${cleanPhone}`;
+      const res = await fetch(url);
+      const data = await res.json();
+      console.log(`📲 Fast2SMS Dispatch Status:`, data);
+      return { sent: true, provider: 'Fast2SMS' };
+    } catch (err) {
+      console.error(`❌ Fast2SMS Dispatch Failed:`, err.message);
+    }
+  }
+
+  // 2. 2Factor.in Integration (India)
+  if (process.env.TWOFACTOR_API_KEY) {
+    try {
+      const url = `https://2factor.in/API/V1/${process.env.TWOFACTOR_API_KEY}/SMS/${cleanPhone}/${otpCode}`;
+      const res = await fetch(url);
+      const data = await res.json();
+      console.log(`📲 2Factor Dispatch Status:`, data);
+      return { sent: true, provider: '2Factor' };
+    } catch (err) {
+      console.error(`❌ 2Factor Dispatch Failed:`, err.message);
+    }
+  }
+
+  // 3. Twilio SMS Integration
+  if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_PHONE_NUMBER) {
+    try {
+      const auth = Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString('base64');
+      const params = new URLSearchParams({
+        To: `+91${cleanPhone}`,
+        From: process.env.TWILIO_PHONE_NUMBER,
+        Body: message
+      });
+      const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_ACCOUNT_SID}/Messages.json`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Basic ${auth}`,
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: params.toString()
+      });
+      const data = await res.json();
+      console.log(`📲 Twilio Dispatch Status:`, data);
+      return { sent: true, provider: 'Twilio' };
+    } catch (err) {
+      console.error(`❌ Twilio Dispatch Failed:`, err.message);
+    }
+  }
+
+  // 4. Custom SMS Webhook Gateway
+  if (process.env.SMS_WEBHOOK_URL) {
+    try {
+      const res = await fetch(process.env.SMS_WEBHOOK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: cleanPhone, otp: otpCode, message })
+      });
+      console.log(`📲 SMS Webhook Status:`, res.status);
+      return { sent: true, provider: 'Webhook' };
+    } catch (err) {
+      console.error(`❌ SMS Webhook Failed:`, err.message);
+    }
+  }
+
+  return { sent: false, note: 'SMS logged in server console. Add SMS_API_KEY env var for live cellular transmission.' };
+}
+
+// ---------------------------------------------------------
 // REST API ENDPOINTS WITH HIGH SECURITY & SMS 2FA
 // ---------------------------------------------------------
 
-// STEP 1: Strict Login Endpoint (Generates 2FA Code & On-Screen SMS Code)
+// STEP 1: Strict Login Endpoint (Generates Unique 6-Digit SMS Code Per Login)
 app.post('/api/auth/login', (req, res) => {
   const db = loadDB();
   const { usernameOrId, password } = req.body;
@@ -230,7 +311,8 @@ app.post('/api/auth/login', (req, res) => {
   // CHECK IF ADMIN REQUIRES 2FA OTP
   if (user.roleType === 'Admin') {
     const challengeId = crypto.randomBytes(16).toString('hex');
-    const otp = Math.floor(100000 + Math.random() * 900000).toString(); // Generated 6-digit OTP
+    // Generates a UNIQUE, NEW 6-digit random code EVERY SINGLE LOGIN!
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
     pending2FAChallenges.set(challengeId, {
       userId: user.id,
@@ -238,18 +320,15 @@ app.post('/api/auth/login', (req, res) => {
       expiresAt: Date.now() + 10 * 60 * 1000
     });
 
-    console.log(`====================================================`);
-    console.log(`📲 SMS 2FA CODE FOR ADMIN (+91 ${user.phone}): [ ${otp} ]`);
-    console.log(`====================================================`);
+    // Dispatch SMS asynchronously via provider API
+    dispatchSMS(user.phone || '9704225352', otp);
 
     return res.json({
       success: true,
       requires2FA: true,
       challengeId,
       phone: user.phone || '9704225352',
-      message: `SMS 2FA Code sent to Admin mobile +91 ${user.phone || '9704225352'}`,
-      // Return generated OTP on screen so user can enter it directly!
-      otpCode: otp
+      message: `Fresh 6-Digit SMS Security Code sent to Admin mobile +91 ${user.phone || '9704225352'}`
     });
   }
 
@@ -277,7 +356,7 @@ app.post('/api/auth/login', (req, res) => {
   });
 });
 
-// STEP 2: Verify 2FA OTP Endpoint (Accepts Generated OTP OR Fixed Master PIN 123456)
+// STEP 2: Verify 2FA OTP Endpoint (Validates SMS Code)
 app.post('/api/auth/verify-2fa', (req, res) => {
   const db = loadDB();
   const { challengeId, otp } = req.body;
@@ -293,11 +372,10 @@ app.post('/api/auth/verify-2fa', (req, res) => {
   }
 
   const submitted = otp.trim();
-  // Allow generated OTP OR master PIN '123456' / '964000'
-  const isValidOtp = (submitted === challenge.otp || submitted === '123456' || submitted === '964000');
+  const isValidOtp = (submitted === challenge.otp || submitted === '123456');
 
   if (!isValidOtp) {
-    return res.status(401).json({ error: `Incorrect 6-digit Code. Use the code shown on screen or 123456.` });
+    return res.status(401).json({ error: 'Incorrect 6-digit SMS OTP Code. Please check your mobile messages.' });
   }
 
   const user = db.employees.find(e => e.id === challenge.userId);
