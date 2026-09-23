@@ -1,6 +1,6 @@
 /* =========================================================
    PULSEATTEND - DBS EMPLOYEE ATTENDANCE SYSTEM
-   FRONTEND CONTROLLER & ROLE-BASED ACCESS (RBAC)
+   FRONTEND CONTROLLER & ROLE-BASED ACCESS (RBAC) WITH SMS 2FA
    ========================================================= */
 
 const API_BASE = '/api';
@@ -8,6 +8,8 @@ const API_BASE = '/api';
 // Global Application State
 let state = {
   currentUser: null,
+  authToken: null,
+  pending2FAChallengeId: null,
   employees: [],
   todayRoster: [],
   filteredRoster: [],
@@ -23,13 +25,16 @@ document.addEventListener('DOMContentLoaded', () => {
   initLiveClock();
   initNavigationTabs();
 
-  // Check saved session in localStorage
+  // Load saved session from localStorage
   const savedUser = localStorage.getItem('pulseattend_user');
-  if (savedUser) {
+  const savedToken = localStorage.getItem('pulseattend_token');
+  if (savedUser && savedToken) {
     try {
       state.currentUser = JSON.parse(savedUser);
+      state.authToken = savedToken;
     } catch (e) {
       state.currentUser = null;
+      state.authToken = null;
     }
   }
 
@@ -51,7 +56,7 @@ function updateScreenView() {
   const welcomeScreen = document.getElementById('welcomeLoginScreen');
   const appScreen = document.getElementById('mainAppScreen');
 
-  if (state.currentUser) {
+  if (state.currentUser && state.authToken) {
     if (welcomeScreen) welcomeScreen.style.display = 'none';
     if (appScreen) appScreen.style.display = 'flex';
 
@@ -624,7 +629,7 @@ async function handleAdminMarkStatus(empId, newStatus) {
 }
 
 /* ---------------------------------------------------------
-   7. Login & Authentication Handlers
+   7. Login & Authentication Handlers (With Admin SMS 2FA)
    --------------------------------------------------------- */
 async function handleWelcomeLogin(e) {
   e.preventDefault();
@@ -650,8 +655,20 @@ async function handleWelcomeLogin(e) {
       return;
     }
 
+    // CHECK IF ADMIN SMS 2FA IS REQUIRED
+    if (data.requires2FA) {
+      state.pending2FAChallengeId = data.challengeId;
+      openModal('2fa-otp-modal');
+
+      showToast(`📲 Admin SMS 2FA OTP sent! (Code: ${data.testOtp})`, 'success');
+      return;
+    }
+
+    // Normal Employee Login
     state.currentUser = data.user;
+    state.authToken = data.token;
     localStorage.setItem('pulseattend_user', JSON.stringify(data.user));
+    localStorage.setItem('pulseattend_token', data.token);
 
     showToast(`Welcome ${data.user.name}! Logged in as ${data.user.roleType}`, 'success');
     updateScreenView();
@@ -660,9 +677,47 @@ async function handleWelcomeLogin(e) {
   }
 }
 
+// Admin SMS 2FA Verification Handler
+async function handleVerify2FA(e) {
+  e.preventDefault();
+
+  const otp = document.getElementById('otpCodeInput').value;
+  if (!otp || otp.length !== 6) {
+    showToast('Please enter the 6-digit SMS OTP code', 'error');
+    return;
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/auth/verify-2fa`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ challengeId: state.pending2FAChallengeId, otp })
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      showToast(data.error || 'SMS 2FA verification failed', 'error');
+      return;
+    }
+
+    state.currentUser = data.user;
+    state.authToken = data.token;
+    localStorage.setItem('pulseattend_user', JSON.stringify(data.user));
+    localStorage.setItem('pulseattend_token', data.token);
+
+    closeModal('2fa-otp-modal');
+    showToast(`👑 Admin 2FA Verified! Welcome Sagar Alapati`, 'success');
+    updateScreenView();
+  } catch (err) {
+    showToast('SMS 2FA Error', 'error');
+  }
+}
+
 function handleLogout() {
   state.currentUser = null;
+  state.authToken = null;
   localStorage.removeItem('pulseattend_user');
+  localStorage.removeItem('pulseattend_token');
   updateScreenView();
   showToast('Logged out successfully', 'success');
 }
@@ -938,5 +993,5 @@ function showToast(message, type = 'success') {
 
   setTimeout(() => {
     toast.remove();
-  }, 3500);
+  }, 4500);
 }

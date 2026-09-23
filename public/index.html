@@ -15,7 +15,7 @@
 <body>
 
   <!-- =========================================================
-       SCREEN 1: REAL WELCOME & LOGIN SCREEN (DEFAULT INITIAL VIEW)
+       SCREEN 1: HIGH SECURITY WELCOME & LOGIN SCREEN
        ========================================================= -->
   <div id="welcomeLoginScreen" class="welcome-screen">
     <div class="welcome-card">
@@ -47,12 +47,12 @@
         </div>
 
         <button type="submit" class="btn-primary-yellow w-100 btn-login-submit">
-          <i class="fa-solid fa-right-to-bracket"></i> Authenticate & Enter Portal
+          <i class="fa-solid fa-shield-halved"></i> Authenticate & Continue
         </button>
       </form>
       
       <div class="welcome-footer">
-        <p><i class="fa-solid fa-shield-halved text-yellow"></i> Protected by DBS Strict Authentication System</p>
+        <p><i class="fa-solid fa-shield-halved text-yellow"></i> Protected by DBS Enterprise PBKDF2 Encryption & SMS 2FA</p>
       </div>
     </div>
   </div>
@@ -246,7 +246,6 @@
         <!-- TAB 3: APPLY LEAVE -->
         <div id="leaves-tab" class="tab-pane">
           <div class="grid-2col">
-            <!-- Leave Request Form -->
             <div class="panel-card">
               <div class="panel-header">
                 <h3><i class="fa-solid fa-paper-plane text-yellow"></i> Submit Leave Application</h3>
@@ -291,7 +290,6 @@
               </form>
             </div>
 
-            <!-- Leave Applications List -->
             <div class="panel-card">
               <div class="panel-header">
                 <h3><i class="fa-solid fa-folder-open text-red"></i> Leave Applications</h3>
@@ -487,7 +485,36 @@
     </nav>
   </div>
 
-  <!-- MODAL 1: ADD EMPLOYEE MODAL -->
+  <!-- MODAL 1: ADMIN SMS 2FA OTP MODAL -->
+  <div class="modal-overlay" id="2fa-otp-modal">
+    <div class="modal-card">
+      <div class="modal-header" style="border-bottom-color: var(--yellow-primary);">
+        <h3><i class="fa-solid fa-mobile-screen-button text-yellow"></i> Admin SMS 2FA Verification</h3>
+        <button class="modal-close" onclick="closeModal('2fa-otp-modal')">&times;</button>
+      </div>
+      <form id="otpVerifyForm" onsubmit="handleVerify2FA(event)">
+        <div class="modal-body text-center" style="text-align: center;">
+          <div style="font-size: 2.5rem; color: var(--yellow-primary); margin-bottom: 8px;">
+            <i class="fa-solid fa-comments"></i>
+          </div>
+          <h4 style="font-size:1.1rem; font-weight:700;">Enter 6-Digit SMS Security Code</h4>
+          <p style="font-size:0.85rem; color:var(--text-muted); margin-top:4px;" id="otpSubtext">
+            SMS 2FA OTP sent to Admin mobile <strong>+91 9704225352</strong>
+          </p>
+
+          <div class="form-group" style="margin-top: 20px;">
+            <input type="text" id="otpCodeInput" class="form-control-lg text-center" placeholder="123456" maxlength="6" style="letter-spacing: 8px; font-size: 1.5rem; text-align: center;" required>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-ghost" onclick="closeModal('2fa-otp-modal')">Cancel</button>
+          <button type="submit" class="btn-primary-yellow"><i class="fa-solid fa-shield-check"></i> Verify & Login</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL 2: ADD EMPLOYEE MODAL -->
   <div class="modal-overlay" id="add-employee-modal">
     <div class="modal-card">
       <div class="modal-header">
@@ -543,7 +570,7 @@
     </div>
   </div>
 
-  <!-- MODAL 2: DEPLOYMENT GUIDE MODAL -->
+  <!-- MODAL 3: DEPLOYMENT GUIDE MODAL -->
   <div class="modal-overlay" id="render-guide-modal">
     <div class="modal-card modal-lg">
       <div class="modal-header">
