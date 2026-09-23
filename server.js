@@ -18,7 +18,7 @@ if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
-// 55 Exact Real Employees list
+// 55 Real DBS Employees List
 const RAW_STAFF_LIST = [
   { id: 'DBS-25132', name: 'Siva Naga Nikhil Krishna Kurra', department: 'Engineering' },
   { id: 'DBS-2519', name: 'Shiloni Sastry Dunna', department: 'HR' },
@@ -92,7 +92,8 @@ function getInitialData() {
       email: `${item.name.toLowerCase().replace(/[^a-z0-9]/g, '.')}@dbs.com`,
       shift: '09:00 - 17:00',
       status: 'Active',
-      password: isAdmin ? 'admin123' : 'emp123',
+      // Strict individual default password: For Sagar Alapati -> 'admin123', for employees -> their DBS ID (e.g. 'DBS-25132')
+      password: isAdmin ? 'admin123' : item.id,
       avatarColor: avatarColors[index % avatarColors.length]
     };
   });
@@ -121,18 +122,6 @@ function getInitialData() {
       status: 'Present',
       location: 'HQ Office',
       notes: 'On-time'
-    },
-    {
-      id: 'ATT-2003',
-      employeeId: 'DBS-2519',
-      employeeName: 'Shiloni Sastry Dunna',
-      department: 'HR',
-      date: todayStr,
-      clockIn: `${todayStr}T09:25:00`,
-      clockOut: null,
-      status: 'Half Day',
-      location: 'HQ Office',
-      notes: 'Admin marked Half Day'
     }
   ];
 
@@ -146,7 +135,7 @@ function getInitialData() {
       startDate: todayStr,
       endDate: todayStr,
       days: 1,
-      reason: 'Personal family work',
+      reason: 'Personal work',
       status: 'Approved'
     }
   ];
@@ -166,7 +155,6 @@ function loadDB() {
     const sagar = db.employees.find(e => e.id === 'DBS-540' || e.name.toLowerCase().includes('sagar alapati'));
     if (sagar) {
       sagar.roleType = 'Admin';
-      sagar.password = sagar.password || 'admin123';
     }
     return db;
   } catch (err) {
@@ -180,15 +168,17 @@ function saveDB(data) {
   fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), 'utf8');
 }
 
-// API Endpoints
+// ---------------------------------------------------------
+// STRICT REAL AUTHENTICATION & REST ENDPOINTS
+// ---------------------------------------------------------
 
-// Authentication Login
+// Real Login Endpoint (Strict Password Verification)
 app.post('/api/auth/login', (req, res) => {
   const db = loadDB();
   const { usernameOrId, password } = req.body;
 
-  if (!usernameOrId) {
-    return res.status(400).json({ error: 'Please select or enter your Employee ID or Name' });
+  if (!usernameOrId || !password) {
+    return res.status(400).json({ error: 'Employee ID/Name and Password are required' });
   }
 
   const query = usernameOrId.trim().toLowerCase();
@@ -199,14 +189,12 @@ app.post('/api/auth/login', (req, res) => {
   );
 
   if (!user) {
-    return res.status(401).json({ error: 'Employee not found in directory' });
+    return res.status(401).json({ error: 'Invalid Employee ID or Name' });
   }
 
-  if (password) {
-    const validPasswords = [user.password, 'admin123', 'emp123', user.id, user.id.replace('DBS-', '')];
-    if (!validPasswords.includes(password.trim())) {
-      return res.status(401).json({ error: 'Incorrect Password/PIN' });
-    }
+  // STRICT REAL AUTHENTICATION: Submitted password MUST match user's stored password exactly!
+  if (user.password !== password.trim()) {
+    return res.status(401).json({ error: 'Incorrect Password. Please check your credentials.' });
   }
 
   res.json({
@@ -222,14 +210,37 @@ app.post('/api/auth/login', (req, res) => {
   });
 });
 
+// Update / Reset Password Endpoint
+app.put('/api/employees/:id/password', (req, res) => {
+  const db = loadDB();
+  const { id } = req.params;
+  const { newPassword } = req.body;
+
+  if (!newPassword || newPassword.trim().length < 4) {
+    return res.status(400).json({ error: 'Password must be at least 4 characters long' });
+  }
+
+  const user = db.employees.find(e => e.id === id);
+  if (!user) {
+    return res.status(404).json({ error: 'Employee not found' });
+  }
+
+  user.password = newPassword.trim();
+  saveDB(db);
+
+  res.json({ success: true, message: `Password for ${user.name} updated successfully` });
+});
+
 app.get('/api/employees', (req, res) => {
   const db = loadDB();
-  res.json(db.employees);
+  // Sanitize password field from public employee list response for security
+  const safeEmployees = db.employees.map(({ password, ...emp }) => emp);
+  res.json(safeEmployees);
 });
 
 app.post('/api/employees', (req, res) => {
   const db = loadDB();
-  const { name, department, role, roleType, email, shift } = req.body;
+  const { name, department, role, roleType, email, shift, password } = req.body;
   
   if (!name || !department) {
     return res.status(400).json({ error: 'Name and Department are required' });
@@ -247,16 +258,18 @@ app.post('/api/employees', (req, res) => {
     email: email || `${name.toLowerCase().replace(/\s+/g, '.')}@dbs.com`,
     shift: shift || '09:00 - 17:00',
     status: 'Active',
-    password: 'emp123',
+    password: password || newId, // Set password strictly to new ID or custom
     avatarColor: colors[Math.floor(Math.random() * colors.length)]
   };
 
   db.employees.push(newEmp);
   saveDB(db);
-  res.status(201).json(newEmp);
+
+  const { password: _, ...safeEmp } = newEmp;
+  res.status(201).json(safeEmp);
 });
 
-// Admin Role Granting / Delegation
+// Admin Role Delegation
 app.put('/api/employees/:id/role', (req, res) => {
   const db = loadDB();
   const emp = db.employees.find(e => e.id === req.params.id);
@@ -268,7 +281,6 @@ app.put('/api/employees/:id/role', (req, res) => {
   }
 
   emp.roleType = roleType;
-  if (roleType === 'Admin') emp.password = 'admin123';
   saveDB(db);
 
   res.json({ success: true, message: `Role updated to ${roleType}`, employee: emp });
@@ -285,7 +297,7 @@ app.post('/api/attendance/mark', (req, res) => {
 
   const validStatuses = ['Present', 'Absent', 'Half Day', 'Late', 'On Leave', 'Clocked Out'];
   if (!validStatuses.includes(status)) {
-    return res.status(400).json({ error: 'Status must be Present, Absent, Half Day, Late, or On Leave' });
+    return res.status(400).json({ error: 'Invalid Status' });
   }
 
   const emp = db.employees.find(e => e.id === employeeId);
@@ -348,7 +360,7 @@ app.get('/api/attendance', (req, res) => {
   res.json(logs);
 });
 
-// Present / Absent / Half Day Today Roster Summary
+// Present / Absent Today Roster Summary
 app.get('/api/attendance/today-summary', (req, res) => {
   const db = loadDB();
   const todayStr = new Date().toISOString().split('T')[0];
@@ -367,7 +379,7 @@ app.get('/api/attendance/today-summary', (req, res) => {
       currentStatus = 'On Leave';
       timeInfo = leave.type;
     } else if (log) {
-      currentStatus = log.status; // 'Present', 'Late', 'Half Day', 'Clocked Out', 'Absent'
+      currentStatus = log.status;
       timeInfo = log.clockIn ? new Date(log.clockIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
     }
 
@@ -561,6 +573,8 @@ app.get('/api/export/csv', (req, res) => {
 app.listen(PORT, () => {
   console.log(`====================================================`);
   console.log(`🚀 PulseAttend Portal running on port ${PORT}`);
-  console.log(`👑 Sagar Alapati (DBS-540) is configured as ADMIN`);
+  console.log(`🔒 Strict Real Authentication Enabled`);
+  console.log(`👑 Sagar Alapati (DBS-540) Admin Password: admin123`);
+  console.log(`👤 Employees Default Password: [Their DBS ID] (e.g. DBS-25132)`);
   console.log(`====================================================`);
 });
