@@ -1,29 +1,42 @@
 /* =========================================================
-   PULSEATTEND - ONLINE EMPLOYEE ATTENDANCE SYSTEM
-   FRONTEND CLIENT LOGIC & REST API CONTROLLER
+   PULSEATTEND - DBS EMPLOYEE ATTENDANCE SYSTEM
+   FRONTEND CONTROLLER & ROLE-BASED ACCESS (RBAC)
    ========================================================= */
 
 const API_BASE = '/api';
 
 // Global Application State
 let state = {
+  currentUser: null, // { id, name, department, role, roleType, avatarColor }
   employees: [],
+  todayRoster: [],
+  filteredRoster: [],
   attendanceLogs: [],
   filteredLogs: [],
   leaves: [],
   stats: {},
-  currentRole: 'admin', // 'employee' or 'admin'
-  selectedTerminalEmployeeId: null,
+  activeStatusFilter: '',
   selectedKioskEmployeeId: null
 };
 
-// Initialize Application on DOM Ready
 document.addEventListener('DOMContentLoaded', () => {
   initLiveClock();
   initNavigationTabs();
-  fetchAllData();
   
-  // Set default dates in leave form
+  // Check if session exists in localStorage
+  const savedUser = localStorage.getItem('pulseattend_user');
+  if (savedUser) {
+    try {
+      state.currentUser = JSON.parse(savedUser);
+    } catch (e) {
+      state.currentUser = null;
+    }
+  }
+
+  updateSessionUI();
+  fetchAllData();
+
+  // Default dates for leave form
   const todayStr = new Date().toISOString().split('T')[0];
   const startDateInput = document.getElementById('leaveStartDate');
   const endDateInput = document.getElementById('leaveEndDate');
@@ -63,17 +76,13 @@ function initNavigationTabs() {
   const mobileTabs = document.querySelectorAll('.mobile-nav-btn');
 
   const switchTab = (tabId) => {
-    // Hide all panes
     document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.remove('active'));
-    // Deactivate all buttons
     desktopTabs.forEach(b => b.classList.remove('active'));
     mobileTabs.forEach(b => b.classList.remove('active'));
 
-    // Activate target pane
     const targetPane = document.getElementById(tabId);
     if (targetPane) targetPane.classList.add('active');
 
-    // Activate corresponding buttons
     desktopTabs.forEach(b => {
       if (b.getAttribute('data-tab') === tabId) b.classList.add('active');
     });
@@ -92,11 +101,63 @@ function initNavigationTabs() {
 }
 
 /* ---------------------------------------------------------
-   3. REST API Fetchers
+   3. Session & Permission Guards
+   --------------------------------------------------------- */
+function updateSessionUI() {
+  const sessionBox = document.getElementById('userSessionBox');
+  const btnLoginOpen = document.getElementById('btnLoginOpen');
+  const btnAddEmpHeader = document.getElementById('btnAddEmpHeader');
+  const adminTabs = document.querySelectorAll('.admin-only-tab');
+
+  const user = state.currentUser;
+
+  if (user) {
+    if (sessionBox) sessionBox.style.display = 'flex';
+    if (btnLoginOpen) btnLoginOpen.style.display = 'none';
+
+    document.getElementById('headerUserName').textContent = user.name;
+    const initials = getInitials(user.name);
+    const avatarEl = document.getElementById('headerUserAvatar');
+    if (avatarEl) {
+      avatarEl.textContent = initials;
+      avatarEl.style.backgroundColor = user.avatarColor || '#F59E0B';
+    }
+
+    const badge = document.getElementById('headerUserRoleBadge');
+    if (badge) {
+      badge.textContent = user.roleType || 'Employee';
+      if (user.roleType === 'Admin') badge.className = 'badge badge-yellow';
+      else if (user.roleType === 'Manager' || user.roleType === 'Team Lead') badge.className = 'badge badge-green';
+      else badge.className = 'badge badge-gray';
+    }
+
+    const isElevated = (user.roleType === 'Admin' || user.roleType === 'Manager' || user.roleType === 'Team Lead');
+
+    adminTabs.forEach(tab => {
+      tab.style.display = isElevated ? 'inline-flex' : 'none';
+    });
+
+    if (btnAddEmpHeader) {
+      btnAddEmpHeader.style.display = user.roleType === 'Admin' ? 'inline-flex' : 'none';
+    }
+  } else {
+    if (sessionBox) sessionBox.style.display = 'none';
+    if (btnLoginOpen) btnLoginOpen.style.display = 'inline-flex';
+    if (btnAddEmpHeader) btnAddEmpHeader.style.display = 'none';
+
+    adminTabs.forEach(tab => {
+      tab.style.display = 'none';
+    });
+  }
+}
+
+/* ---------------------------------------------------------
+   4. REST API Fetchers
    --------------------------------------------------------- */
 async function fetchAllData() {
   await Promise.all([
     fetchEmployees(),
+    fetchTodayRosterSummary(),
     fetchStats(),
     fetchAttendanceLogs(),
     fetchLeaves()
@@ -108,10 +169,22 @@ async function fetchEmployees() {
   try {
     const res = await fetch(`${API_BASE}/employees`);
     state.employees = await res.json();
-    populateEmployeeDropdowns();
+    populateDropdowns();
     renderStaffGrid();
   } catch (err) {
-    showToast('Failed to load employees', 'error');
+    console.error('Error fetching employees:', err);
+  }
+}
+
+async function fetchTodayRosterSummary() {
+  try {
+    const res = await fetch(`${API_BASE}/attendance/today-summary`);
+    state.todayRoster = await res.json();
+    state.filteredRoster = [...state.todayRoster];
+    renderRosterGrid();
+    updateRosterCounters();
+  } catch (err) {
+    console.error('Error fetching roster summary:', err);
   }
 }
 
@@ -154,7 +227,7 @@ async function fetchTodayActivity() {
   const todayLogs = state.attendanceLogs.filter(a => a.date === todayStr);
 
   if (todayLogs.length === 0) {
-    activityContainer.innerHTML = `<div class="feed-empty" style="text-align:center; padding:20px; color:var(--text-muted);">No clock-in activity recorded today yet.</div>`;
+    activityContainer.innerHTML = `<div style="text-align:center; padding:20px; color:var(--text-muted);">No clock-in activity recorded today yet.</div>`;
     return;
   }
 
@@ -175,7 +248,7 @@ async function fetchTodayActivity() {
     html += `
       <div class="${itemClass}">
         <div class="feed-user">
-          <h5>${escapeHTML(log.employeeName)} ${badgeHtml}</h5>
+          <h5>${escapeHTML(log.employeeName)} (${escapeHTML(log.employeeId)}) ${badgeHtml}</h5>
           <p>${escapeHTML(log.department)} • ${escapeHTML(log.location)}</p>
         </div>
         <div class="feed-time">
@@ -190,83 +263,115 @@ async function fetchTodayActivity() {
 }
 
 /* ---------------------------------------------------------
-   4. Render UI Components
+   5. Render UI Views
    --------------------------------------------------------- */
 function renderStats() {
   const { totalEmployees, present, late, onLeave, attendanceRate } = state.stats;
 
-  document.getElementById('statTotalEmployees').textContent = totalEmployees || 0;
-  document.getElementById('statPresentToday').textContent = present || 0;
-  document.getElementById('statLateToday').textContent = late || 0;
-  document.getElementById('statOnLeave').textContent = onLeave || 0;
+  if (document.getElementById('statTotalEmployees')) document.getElementById('statTotalEmployees').textContent = totalEmployees || 55;
+  if (document.getElementById('statPresentToday')) document.getElementById('statPresentToday').textContent = present || 0;
+  if (document.getElementById('statLateToday')) document.getElementById('statLateToday').textContent = late || 0;
+  if (document.getElementById('statOnLeave')) document.getElementById('statOnLeave').textContent = onLeave || 0;
 
   const rateStr = (attendanceRate || 0) + '%';
-  document.getElementById('statAttendanceRate').textContent = rateStr;
-  document.getElementById('statProgressBar').style.width = rateStr;
+  if (document.getElementById('statAttendanceRate')) document.getElementById('statAttendanceRate').textContent = rateStr;
+  if (document.getElementById('statProgressBar')) document.getElementById('statProgressBar').style.width = rateStr;
 }
 
-function populateEmployeeDropdowns() {
-  const termSelect = document.getElementById('terminalEmployeeSelect');
+function renderRosterGrid() {
+  const container = document.getElementById('todayRosterGrid');
+  if (!container) return;
+
+  if (state.filteredRoster.length === 0) {
+    container.innerHTML = `<div style="grid-column:1/-1; text-align:center; padding:30px; color:var(--text-muted);">No employees found matching filter.</div>`;
+    return;
+  }
+
+  let html = '';
+  state.filteredRoster.forEach(emp => {
+    const initials = getInitials(emp.name);
+    let badgeClass = 'badge-gray';
+    let icon = 'fa-circle-xmark';
+
+    if (emp.status === 'Present') { badgeClass = 'badge-green'; icon = 'fa-circle-check'; }
+    else if (emp.status === 'Late') { badgeClass = 'badge-red'; icon = 'fa-triangle-exclamation'; }
+    else if (emp.status === 'On Leave') { badgeClass = 'badge-orange'; icon = 'fa-plane-departure'; }
+    else if (emp.status === 'Clocked Out') { badgeClass = 'badge-yellow'; icon = 'fa-circle-check'; }
+
+    html += `
+      <div class="roster-card">
+        <div class="roster-avatar" style="background-color: ${emp.avatarColor || '#F59E0B'};">${initials}</div>
+        <div class="roster-info">
+          <h4>${escapeHTML(emp.name)}</h4>
+          <div class="roster-id">${escapeHTML(emp.id)} • ${escapeHTML(emp.department)}</div>
+        </div>
+        <div class="roster-status-badge">
+          <span class="badge ${badgeClass}"><i class="fa-solid ${icon}"></i> ${emp.status}</span>
+          ${emp.timeInfo ? `<div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">${emp.timeInfo}</div>` : ''}
+        </div>
+      </div>
+    `;
+  });
+
+  container.innerHTML = html;
+}
+
+function updateRosterCounters() {
+  const present = state.todayRoster.filter(r => r.status === 'Present' || r.status === 'Clocked Out').length;
+  const late = state.todayRoster.filter(r => r.status === 'Late').length;
+  const leave = state.todayRoster.filter(r => r.status === 'On Leave').length;
+  const absent = state.todayRoster.filter(r => r.status === 'Absent').length;
+
+  if (document.getElementById('countPresent')) document.getElementById('countPresent').textContent = present;
+  if (document.getElementById('countLate')) document.getElementById('countLate').textContent = late;
+  if (document.getElementById('countLeave')) document.getElementById('countLeave').textContent = leave;
+  if (document.getElementById('countAbsent')) document.getElementById('countAbsent').textContent = absent;
+}
+
+function filterRosterStatus() {
+  const search = document.getElementById('searchRosterInput').value.toLowerCase();
+
+  state.filteredRoster = state.todayRoster.filter(emp => {
+    const matchSearch = !search || 
+      emp.name.toLowerCase().includes(search) || 
+      emp.id.toLowerCase().includes(search) || 
+      emp.department.toLowerCase().includes(search);
+    
+    const matchTag = !state.activeStatusFilter || emp.status.toLowerCase() === state.activeStatusFilter.toLowerCase();
+
+    return matchSearch && matchTag;
+  });
+
+  renderRosterGrid();
+}
+
+function filterRosterByTag(tag) {
+  state.activeStatusFilter = tag;
+  filterRosterStatus();
+}
+
+function populateDropdowns() {
   const kioskSelect = document.getElementById('kioskEmployeeSelect');
   const leaveSelect = document.getElementById('leaveEmployeeSelect');
+  const loginSelect = document.getElementById('loginUserSelect');
 
-  let options = '<option value="">-- Choose Employee Name --</option>';
+  let options = '<option value="">-- Choose Name / DBS ID --</option>';
   state.employees.forEach(emp => {
     options += `<option value="${emp.id}">${escapeHTML(emp.name)} (${emp.id} - ${emp.department})</option>`;
   });
 
-  if (termSelect) {
-    termSelect.innerHTML = options;
-    if (state.employees.length > 0 && !state.selectedTerminalEmployeeId) {
-      termSelect.value = state.employees[0].id;
-      updateTerminalEmployeeDetails();
-    }
-  }
-
   if (kioskSelect) {
     kioskSelect.innerHTML = options;
     if (state.employees.length > 0 && !state.selectedKioskEmployeeId) {
-      kioskSelect.value = state.employees[0].id;
+      // Default to Sagar Alapati if available
+      const sagar = state.employees.find(e => e.id === 'DBS-540');
+      kioskSelect.value = sagar ? sagar.id : state.employees[0].id;
       syncKioskEmployee();
     }
   }
 
-  if (leaveSelect) {
-    leaveSelect.innerHTML = options;
-  }
-}
-
-function updateTerminalEmployeeDetails() {
-  const select = document.getElementById('terminalEmployeeSelect');
-  const empId = select.value;
-  state.selectedTerminalEmployeeId = empId;
-
-  const emp = state.employees.find(e => e.id === empId);
-  if (!emp) return;
-
-  const initials = getInitials(emp.name);
-  const avatarEl = document.getElementById('terminalEmpAvatar');
-  avatarEl.textContent = initials;
-  avatarEl.style.backgroundColor = emp.avatarColor || '#F59E0B';
-
-  document.getElementById('terminalEmpName').textContent = emp.name;
-  document.getElementById('terminalEmpDeptRole').textContent = `${emp.department} • ${emp.role}`;
-
-  // Check clock status for today
-  const todayStr = new Date().toISOString().split('T')[0];
-  const todayLog = state.attendanceLogs.find(a => a.employeeId === empId && a.date === todayStr);
-
-  const statusBadge = document.getElementById('terminalEmpStatusBadge');
-  if (!todayLog) {
-    statusBadge.innerHTML = `<span class="badge badge-gray">Not Clocked In</span>`;
-  } else if (!todayLog.clockOut) {
-    const isLate = todayLog.status === 'Late';
-    statusBadge.innerHTML = isLate 
-      ? `<span class="badge badge-red"><i class="fa-solid fa-triangle-exclamation"></i> Clocked In (Late: ${new Date(todayLog.clockIn).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})})</span>`
-      : `<span class="badge badge-green"><i class="fa-solid fa-check"></i> Clocked In (${new Date(todayLog.clockIn).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})})</span>`;
-  } else {
-    statusBadge.innerHTML = `<span class="badge badge-yellow"><i class="fa-solid fa-circle-check"></i> Clocked Out (${new Date(todayLog.clockOut).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})})</span>`;
-  }
+  if (leaveSelect) leaveSelect.innerHTML = options;
+  if (loginSelect) loginSelect.innerHTML = options;
 }
 
 function syncKioskEmployee() {
@@ -279,24 +384,28 @@ function syncKioskEmployee() {
 
   const initials = getInitials(emp.name);
   const avatarEl = document.getElementById('kioskAvatar');
-  avatarEl.textContent = initials;
-  avatarEl.style.backgroundColor = emp.avatarColor || '#F59E0B';
+  if (avatarEl) {
+    avatarEl.textContent = initials;
+    avatarEl.style.backgroundColor = emp.avatarColor || '#F59E0B';
+  }
 
-  document.getElementById('kioskEmpName').textContent = emp.name;
+  if (document.getElementById('kioskEmpName')) document.getElementById('kioskEmpName').textContent = emp.name;
 
   const todayStr = new Date().toISOString().split('T')[0];
   const todayLog = state.attendanceLogs.find(a => a.employeeId === empId && a.date === todayStr);
 
   const statusPill = document.getElementById('kioskStatusPill');
-  if (!todayLog) {
-    statusPill.className = 'badge badge-gray';
-    statusPill.textContent = 'Not Clocked In Today';
-  } else if (!todayLog.clockOut) {
-    statusPill.className = todayLog.status === 'Late' ? 'badge badge-red' : 'badge badge-green';
-    statusPill.textContent = `Active (${todayLog.status})`;
-  } else {
-    statusPill.className = 'badge badge-yellow';
-    statusPill.textContent = 'Clocked Out';
+  if (statusPill) {
+    if (!todayLog) {
+      statusPill.className = 'badge badge-gray';
+      statusPill.textContent = 'Not Clocked In Today';
+    } else if (!todayLog.clockOut) {
+      statusPill.className = todayLog.status === 'Late' ? 'badge badge-red' : 'badge badge-green';
+      statusPill.textContent = `Active (${todayLog.status})`;
+    } else {
+      statusPill.className = 'badge badge-yellow';
+      statusPill.textContent = 'Clocked Out';
+    }
   }
 }
 
@@ -305,7 +414,7 @@ function renderAttendanceTable() {
   if (!tbody) return;
 
   if (state.filteredLogs.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding: 24px; color:var(--text-muted);">No attendance entries match the current filter.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding: 24px; color:var(--text-muted);">No attendance entries match current filter.</td></tr>`;
     return;
   }
 
@@ -342,29 +451,41 @@ function renderStaffGrid() {
   const grid = document.getElementById('staffGrid');
   if (!grid) return;
 
-  if (state.employees.length === 0) {
-    grid.innerHTML = `<div style="grid-column:1/-1; text-align:center; padding:30px; color:var(--text-muted);">No staff registered yet. Click "Register Employee" to add your first member.</div>`;
-    return;
-  }
+  const isAdmin = state.currentUser && state.currentUser.roleType === 'Admin';
 
   let html = '';
   state.employees.forEach(emp => {
     const initials = getInitials(emp.name);
     const bg = emp.avatarColor || '#F59E0B';
+    const roleType = emp.roleType || (emp.id === 'DBS-540' ? 'Admin' : 'Employee');
 
     html += `
       <div class="staff-card">
         <div class="staff-avatar" style="background-color: ${bg};">${initials}</div>
         <div class="staff-info">
-          <h4>${escapeHTML(emp.name)}</h4>
-          <div class="staff-role">${escapeHTML(emp.role)}</div>
-          <div class="staff-meta"><i class="fa-solid fa-building"></i> ${escapeHTML(emp.department)}</div>
+          <h4>${escapeHTML(emp.name)} ${roleType === 'Admin' ? '👑' : ''}</h4>
+          <div class="staff-role">${escapeHTML(emp.id)} • ${escapeHTML(emp.department)}</div>
           <div class="staff-meta"><i class="fa-solid fa-envelope"></i> ${escapeHTML(emp.email)}</div>
-          <div class="staff-meta"><i class="fa-solid fa-clock"></i> ${escapeHTML(emp.shift)}</div>
+          
+          <!-- Role Delegation Control (Admin Only) -->
+          ${isAdmin ? `
+            <div class="role-assign-box">
+              <label style="font-size:0.75rem; color:var(--text-muted);">Access Level:</label>
+              <select class="role-assign-select" onchange="handleGrantRole('${emp.id}', this.value)">
+                <option value="Employee" ${roleType === 'Employee' ? 'selected' : ''}>Employee</option>
+                <option value="Team Lead" ${roleType === 'Team Lead' ? 'selected' : ''}>Team Lead (TL)</option>
+                <option value="Manager" ${roleType === 'Manager' ? 'selected' : ''}>Manager</option>
+                <option value="Admin" ${roleType === 'Admin' ? 'selected' : ''}>Admin (Full Control)</option>
+              </select>
+            </div>
+          ` : `
+            <div style="margin-top:4px;"><span class="badge ${roleType === 'Admin' ? 'badge-yellow' : 'badge-gray'}">${roleType}</span></div>
+          `}
         </div>
-        ${state.currentRole === 'admin' ? `
+
+        ${isAdmin && emp.id !== 'DBS-540' ? `
           <div class="staff-actions">
-            <button class="btn-icon-danger" onclick="handleDeleteEmployee('${emp.id}')" title="Delete Employee">
+            <button class="btn-icon-danger" onclick="handleDeleteEmployee('${emp.id}')" title="Delete Member">
               <i class="fa-solid fa-trash-can"></i>
             </button>
           </div>
@@ -385,9 +506,11 @@ function renderLeavesList() {
   if (countBadge) countBadge.textContent = `${pendingLeaves.length} Pending`;
 
   if (state.leaves.length === 0) {
-    container.innerHTML = `<div style="text-align:center; padding:30px; color:var(--text-muted);">No leave applications found.</div>`;
+    container.innerHTML = `<div style="text-align:center; padding:30px; color:var(--text-muted);">No leave applications submitted.</div>`;
     return;
   }
+
+  const canApprove = state.currentUser && (state.currentUser.roleType === 'Admin' || state.currentUser.roleType === 'Manager' || state.currentUser.roleType === 'Team Lead');
 
   let html = '';
   state.leaves.forEach(leave => {
@@ -413,7 +536,7 @@ function renderLeavesList() {
           <div><strong>Dates:</strong> ${leave.startDate} &rarr; ${leave.endDate}</div>
           <div style="margin-top:4px; font-style:italic;">"${escapeHTML(leave.reason)}"</div>
         </div>
-        ${(state.currentRole === 'admin' && leave.status === 'Pending') ? `
+        ${(canApprove && leave.status === 'Pending') ? `
           <div class="leave-admin-actions">
             <button class="btn-approve" onclick="handleUpdateLeave('${leave.id}', 'Approved')">
               <i class="fa-solid fa-check"></i> Approve
@@ -431,70 +554,90 @@ function renderLeavesList() {
 }
 
 /* ---------------------------------------------------------
-   5. Action Handlers (Clock In / Out, Forms)
+   6. Authentication & Role Handlers
    --------------------------------------------------------- */
-async function handleClockIn() {
-  const empId = document.getElementById('terminalEmployeeSelect').value;
-  const location = document.getElementById('clockinLocation').value;
-  const notes = document.getElementById('clockinNotes').value;
+async function handleLoginSubmit(e) {
+  e.preventDefault();
 
-  if (!empId) {
-    showToast('Please select an employee name', 'error');
+  const usernameOrId = document.getElementById('loginUserSelect').value;
+  const password = document.getElementById('loginPassword').value;
+
+  if (!usernameOrId) {
+    showToast('Please select your name from dropdown', 'error');
     return;
   }
 
   try {
-    const res = await fetch(`${API_BASE}/attendance/clock-in`, {
+    const res = await fetch(`${API_BASE}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ employeeId: empId, location, notes })
+      body: JSON.stringify({ usernameOrId, password })
     });
 
     const data = await res.json();
     if (!res.ok) {
-      showToast(data.error || 'Clock-in failed', 'error');
+      showToast(data.error || 'Authentication failed', 'error');
       return;
     }
 
-    showToast(`Clocked In successfully! Status: ${data.status}`, 'success');
-    document.getElementById('clockinNotes').value = '';
+    state.currentUser = data.user;
+    localStorage.setItem('pulseattend_user', JSON.stringify(data.user));
+
+    updateSessionUI();
+    closeModal('login-modal');
+    document.getElementById('loginForm').reset();
+    showToast(`Welcome ${data.user.name}! Logged in as ${data.user.roleType}`, 'success');
+
     await fetchAllData();
-    updateTerminalEmployeeDetails();
   } catch (err) {
-    showToast('Network error during clock-in', 'error');
+    showToast('Network error during login', 'error');
   }
 }
 
-async function handleClockOut() {
-  const empId = document.getElementById('terminalEmployeeSelect').value;
+function quickFillLogin(empId, pass) {
+  const select = document.getElementById('loginUserSelect');
+  const passInput = document.getElementById('loginPassword');
+  if (select) select.value = empId;
+  if (passInput) passInput.value = pass;
+}
 
-  if (!empId) {
-    showToast('Please select an employee name', 'error');
+function handleLogout() {
+  state.currentUser = null;
+  localStorage.removeItem('pulseattend_user');
+  updateSessionUI();
+  showToast('Logged out successfully', 'success');
+  fetchAllData();
+}
+
+async function handleGrantRole(empId, newRoleType) {
+  if (!state.currentUser || state.currentUser.roleType !== 'Admin') {
+    showToast('Only Admin (Sagar Alapati) can change access roles', 'error');
     return;
   }
 
   try {
-    const res = await fetch(`${API_BASE}/attendance/clock-out`, {
-      method: 'POST',
+    const res = await fetch(`${API_BASE}/employees/${empId}/role`, {
+      method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ employeeId: empId })
+      body: JSON.stringify({ roleType: newRoleType })
     });
 
     const data = await res.json();
     if (!res.ok) {
-      showToast(data.error || 'Clock-out failed', 'error');
+      showToast(data.error || 'Role update failed', 'error');
       return;
     }
 
-    showToast(`Clocked Out successfully! Total Hours: ${data.workHours || 0} hrs`, 'success');
-    await fetchAllData();
-    updateTerminalEmployeeDetails();
+    showToast(`Granted ${newRoleType} access to ${data.employee.name}`, 'success');
+    await fetchEmployees();
   } catch (err) {
-    showToast('Network error during clock-out', 'error');
+    showToast('Error updating role', 'error');
   }
 }
 
-// Standalone Kiosk Clock Handlers
+/* ---------------------------------------------------------
+   7. Clock In / Out & Forms Handlers
+   --------------------------------------------------------- */
 async function handleKioskClockIn() {
   const empId = document.getElementById('kioskEmployeeSelect').value;
   const location = document.getElementById('kioskLocation').value;
@@ -518,7 +661,7 @@ async function handleKioskClockIn() {
       return;
     }
 
-    showToast(`Welcome! Clocked in as ${data.status}`, 'success');
+    showToast(`Clocked in as ${data.status}`, 'success');
     document.getElementById('kioskNotes').value = '';
     await fetchAllData();
     syncKioskEmployee();
@@ -548,7 +691,7 @@ async function handleKioskClockOut() {
       return;
     }
 
-    showToast(`Goodbye! Shift completed (${data.workHours || 0} hrs)`, 'success');
+    showToast(`Clocked out! Shift completed (${data.workHours || 0} hrs)`, 'success');
     await fetchAllData();
     syncKioskEmployee();
   } catch (err) {
@@ -556,13 +699,12 @@ async function handleKioskClockOut() {
   }
 }
 
-// Add New Employee Form
 async function handleAddEmployee(e) {
   e.preventDefault();
 
   const name = document.getElementById('newEmpName').value;
   const department = document.getElementById('newEmpDept').value;
-  const role = document.getElementById('newEmpRole').value;
+  const roleType = document.getElementById('newEmpRoleType').value;
   const email = document.getElementById('newEmpEmail').value;
   const shift = document.getElementById('newEmpShift').value;
 
@@ -570,7 +712,7 @@ async function handleAddEmployee(e) {
     const res = await fetch(`${API_BASE}/employees`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, department, role, email, shift })
+      body: JSON.stringify({ name, department, roleType, email, shift })
     });
 
     if (!res.ok) {
@@ -578,18 +720,17 @@ async function handleAddEmployee(e) {
       return;
     }
 
-    showToast(`Employee ${name} registered successfully!`, 'success');
+    showToast(`Registered ${name} as ${roleType}!`, 'success');
     closeModal('add-employee-modal');
     document.getElementById('addEmployeeForm').reset();
-    await fetchEmployees();
-    await fetchStats();
+    await fetchAllData();
   } catch (err) {
     showToast('Error registering employee', 'error');
   }
 }
 
 async function handleDeleteEmployee(empId) {
-  if (!confirm(`Are you sure you want to delete employee ID ${empId}?`)) return;
+  if (!confirm(`Are you sure you want to delete member ${empId}?`)) return;
 
   try {
     const res = await fetch(`${API_BASE}/employees/${empId}`, { method: 'DELETE' });
@@ -598,14 +739,12 @@ async function handleDeleteEmployee(empId) {
       return;
     }
     showToast('Employee removed', 'success');
-    await fetchEmployees();
-    await fetchStats();
+    await fetchAllData();
   } catch (err) {
     showToast('Error deleting employee', 'error');
   }
 }
 
-// Leave Handlers
 async function handleLeaveSubmit(e) {
   e.preventDefault();
 
@@ -630,7 +769,7 @@ async function handleLeaveSubmit(e) {
     showToast('Leave application submitted for approval', 'success');
     document.getElementById('leaveRequestForm').reset();
     await fetchLeaves();
-    await fetchStats();
+    await fetchTodayRosterSummary();
   } catch (err) {
     showToast('Network error submitting leave', 'error');
   }
@@ -645,12 +784,13 @@ async function handleUpdateLeave(leaveId, newStatus) {
     });
 
     if (!res.ok) {
-      showToast('Failed to update leave', 'error');
+      showToast('Failed to update leave status', 'error');
       return;
     }
 
     showToast(`Leave status updated to ${newStatus}`, 'success');
     await fetchLeaves();
+    await fetchTodayRosterSummary();
     await fetchStats();
   } catch (err) {
     showToast('Error updating leave', 'error');
@@ -658,7 +798,7 @@ async function handleUpdateLeave(leaveId, newStatus) {
 }
 
 /* ---------------------------------------------------------
-   6. Filtering & Search Logic
+   8. Logs Filtering & CSV Export
    --------------------------------------------------------- */
 function applyLogFilters() {
   const search = document.getElementById('searchLogInput').value.toLowerCase();
@@ -692,26 +832,13 @@ function resetLogFilters() {
   renderAttendanceTable();
 }
 
-/* ---------------------------------------------------------
-   7. CSV Export
-   --------------------------------------------------------- */
 function downloadCSVReport() {
   window.location.href = `${API_BASE}/export/csv`;
 }
 
 /* ---------------------------------------------------------
-   8. Role Switcher & Utilities
+   9. Modal & Utility Helpers
    --------------------------------------------------------- */
-function toggleUserRole() {
-  const role = document.getElementById('roleToggle').value;
-  state.currentRole = role;
-
-  renderStaffGrid();
-  renderLeavesList();
-
-  showToast(`Switched to ${role === 'admin' ? 'Admin / HR View' : 'Employee View'}`, 'success');
-}
-
 function openModal(modalId) {
   const modal = document.getElementById(modalId);
   if (modal) modal.classList.add('active');
@@ -723,7 +850,7 @@ function closeModal(modalId) {
 }
 
 function getInitials(name) {
-  if (!name) return 'EMP';
+  if (!name) return 'DBS';
   const parts = name.trim().split(' ');
   if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();

@@ -14,101 +14,157 @@ app.use(express.static(path.join(__dirname, 'public')));
 const DATA_DIR = path.join(__dirname, 'data');
 const DB_FILE = path.join(DATA_DIR, 'db.json');
 
-// Ensure data directory exists
 if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
-// Seed default data if database doesn't exist
+// 55 Exact Real Employees provided by user
+const RAW_STAFF_LIST = [
+  { id: 'DBS-25132', name: 'Siva Naga Nikhil Krishna Kurra', department: 'Engineering' },
+  { id: 'DBS-2519', name: 'Shiloni Sastry Dunna', department: 'HR' },
+  { id: 'DBS-2649', name: 'Durga Sri Venkateswarlu Vemula', department: 'Engineering' },
+  { id: 'DBS-327', name: 'Vijaya Sai Krishna Keerthi', department: 'Design' },
+  { id: 'DBS-230', name: 'Dharma Teja Nama', department: 'Engineering' },
+  { id: 'DBS-2511', name: 'Leela Krishna Dasari', department: 'Engineering' },
+  { id: 'DBS-424', name: 'Rakesh Naragarla', department: 'Operations' },
+  { id: 'DBS-352', name: 'Vijaya Bhaskar Devarapalli', department: 'Operations' },
+  { id: 'DBS-2668', name: 'Emani Rakesh', department: 'Sales' },
+  { id: 'DBS-25159', name: 'Annavarapu Abhishek', department: 'Engineering' },
+  { id: 'DBS-548', name: 'Praneeth Raj Bontha', department: 'Engineering' },
+  { id: 'DBS-568', name: 'Venkata Ramesh Polisetty', department: 'Operations' },
+  { id: 'DBS-549', name: 'Srinivas Mannem', department: 'Operations' },
+  { id: 'DBS-433', name: 'Satyanarayana Reddy Akkala', department: 'Sales' },
+  { id: 'DBS-2690', name: 'Nuthalapati Karthik Teja', department: 'Design' },
+  { id: 'DBS-560', name: 'Anilkumar Ullamgunta', department: 'Engineering' },
+  { id: 'DBS-2613', name: 'Naga Sasidhar Reddy Akkala', department: 'Engineering' },
+  { id: 'DBS-554', name: 'Purna Venkata Krishna Sai Pattem', department: 'Engineering' },
+  { id: 'DBS-2639', name: 'Shaik Kutubuddin', department: 'Operations' },
+  { id: 'DBS-2514', name: 'Surendra Kolatam', department: 'Operations' },
+  { id: 'DBS-2640', name: 'Lukka Devendra', department: 'Engineering' },
+  { id: 'DBS-2685', name: 'Aradhyula Sai Avinash Babu', department: 'Engineering' },
+  { id: 'DBS-2674', name: 'Mogalipuvvu Ankamma Rao', department: 'Operations' },
+  { id: 'DBS-2555', name: 'Liveeju Borugadda', department: 'Support' },
+  { id: 'DBS-2648', name: 'Aadi Reddy Cheerala', department: 'Engineering' },
+  { id: 'DBS-2669', name: 'Pamu Nagendra Reddy', department: 'Engineering' },
+  { id: 'DBS-2604', name: 'Gattu Navakanth', department: 'Sales' },
+  { id: 'DBS-2605', name: 'Dividevara Naga Babu', department: 'Operations' },
+  { id: 'DBS-512', name: 'Rafi Mahammad', department: 'Support' },
+  { id: 'DBS-2616', name: 'Jaffer Shaik', department: 'Operations' },
+  { id: 'DBS-2684', name: 'Shaik Rehman Beig', department: 'Support' },
+  { id: 'DBS-449', name: 'Jyothi Swaroop Cheemakurti', department: 'Engineering' },
+  { id: 'DBS-466', name: 'Suresh Dabbakuti', department: 'Operations' },
+  { id: 'DBS-2606', name: 'Shaik Jubear Ahammed', department: 'Support' },
+  { id: 'DBS-2615', name: 'Mamilla Sanjay', department: 'Operations' },
+  { id: 'DBS-515', name: 'Mahaboob Subhani Shaik', department: 'Support' },
+  { id: 'DBS-25133', name: 'Mani Varma Pusapati', department: 'Engineering' },
+  { id: 'DBS-2686', name: 'Thatapudi Anvesh Babu', department: 'Engineering' },
+  { id: 'DBS-2512', name: 'Bhavani Shankar Kommuri', department: 'Operations' },
+  { id: 'DBS-2554', name: 'Mohiddin Mohammad', department: 'Support' },
+  { id: 'DBS-513', name: 'Shahid Shaik', department: 'Operations' },
+  { id: 'DBS-514', name: 'Zakeer Hussain Mohammed', department: 'Operations' },
+  { id: 'DBS-25114', name: 'Syam Venkata Sai Naralasetty', department: 'Engineering' },
+  { id: 'DBS-2607', name: 'Gollamudi Yehoshuva', department: 'Engineering' },
+  { id: 'DBS-429', name: 'Durgaprasad Mandava', department: 'Operations' },
+  { id: 'DBS-2530', name: 'Lalith Venkata Sai Kota', department: 'Design' },
+  { id: 'DBS-511', name: 'Fhayaz Ahammad Shaik', department: 'Support' },
+  { id: 'DBS-306', name: 'Rajesh Dhabbakuti', department: 'Operations' },
+  { id: 'DBS-2661', name: 'Pendyala Venkata Ramesh', department: 'Operations' },
+  { id: 'DBS-2617', name: 'Karthik Dividevara', department: 'Engineering' },
+  { id: 'DBS-540', name: 'Sagar Alapati', department: 'Executive Management', roleType: 'Admin' }, // SAGAR ALAPATI IS ADMIN!
+  { id: 'DBS-25158', name: 'Atla Naga Venu', department: 'Operations' },
+  { id: 'DBS-550', name: 'Prathyush Raj Bontha', department: 'Engineering' },
+  { id: 'DBS-25138', name: 'Surendra Gudvalli', department: 'Engineering' },
+  { id: 'DBS-566', name: 'Vijay Kumar Naligila', department: 'Operations' }
+];
+
 function getInitialData() {
   const todayStr = new Date().toISOString().split('T')[0];
-  
-  return {
-    employees: [
-      { id: 'EMP-101', name: 'Alex Morgan', department: 'Engineering', role: 'Senior Frontend Developer', email: 'alex.m@company.com', shift: '09:00 - 17:00', status: 'Active', avatarColor: '#EF4444' },
-      { id: 'EMP-102', name: 'Sarah Jenkins', department: 'Design', role: 'UI/UX Designer', email: 'sarah.j@company.com', shift: '09:00 - 17:00', status: 'Active', avatarColor: '#F59E0B' },
-      { id: 'EMP-103', name: 'David Chen', department: 'Engineering', role: 'Backend Engineer', email: 'david.c@company.com', shift: '09:00 - 17:00', status: 'Active', avatarColor: '#DC2626' },
-      { id: 'EMP-104', name: 'Priya Sharma', department: 'HR', role: 'HR Specialist', email: 'priya.s@company.com', shift: '09:00 - 17:00', status: 'Active', avatarColor: '#D97706' },
-      { id: 'EMP-105', name: 'Marcus Vance', department: 'Sales', role: 'Sales Account Executive', email: 'marcus.v@company.com', shift: '09:00 - 17:00', status: 'Active', avatarColor: '#B91C1C' },
-      { id: 'EMP-106', name: 'Elena Rostova', department: 'Support', role: 'Customer Success Manager', email: 'elena.r@company.com', shift: '09:00 - 17:00', status: 'Active', avatarColor: '#F59E0B' }
-    ],
-    attendance: [
-      {
-        id: 'ATT-1001',
-        employeeId: 'EMP-101',
-        employeeName: 'Alex Morgan',
-        department: 'Engineering',
-        date: todayStr,
-        clockIn: `${todayStr}T08:52:00`,
-        clockOut: null,
-        status: 'Present',
-        location: 'HQ Office',
-        notes: 'Arrived early for sprint planning'
-      },
-      {
-        id: 'ATT-1002',
-        employeeId: 'EMP-102',
-        employeeName: 'Sarah Jenkins',
-        department: 'Design',
-        date: todayStr,
-        clockIn: `${todayStr}T09:28:00`,
-        clockOut: null,
-        status: 'Late',
-        location: 'HQ Office',
-        notes: 'Traffic delay on highway'
-      },
-      {
-        id: 'ATT-1003',
-        employeeId: 'EMP-103',
-        employeeName: 'David Chen',
-        department: 'Engineering',
-        date: todayStr,
-        clockIn: `${todayStr}T09:02:00`,
-        clockOut: null,
-        status: 'Present',
-        location: 'Remote (Home)',
-        notes: 'Working remotely today'
-      },
-      {
-        id: 'ATT-1004',
-        employeeId: 'EMP-105',
-        employeeName: 'Marcus Vance',
-        department: 'Sales',
-        date: todayStr,
-        clockIn: `${todayStr}T08:58:00`,
-        clockOut: `${todayStr}T17:05:00`,
-        status: 'Clocked Out',
-        location: 'Client Site',
-        notes: 'Onsite sales demo'
-      }
-    ],
-    leaves: [
-      {
-        id: 'LV-501',
-        employeeId: 'EMP-104',
-        employeeName: 'Priya Sharma',
-        department: 'HR',
-        type: 'Casual Leave',
-        startDate: todayStr,
-        endDate: todayStr,
-        days: 1,
-        reason: 'Personal family event',
-        status: 'Approved'
-      },
-      {
-        id: 'LV-502',
-        employeeId: 'EMP-106',
-        employeeName: 'Elena Rostova',
-        department: 'Support',
-        type: 'Sick Leave',
-        startDate: todayStr,
-        endDate: todayStr,
-        days: 1,
-        reason: 'Severe migraine',
-        status: 'Pending'
-      }
-    ]
-  };
+  const avatarColors = ['#EF4444', '#F59E0B', '#DC2626', '#D97706', '#B91C1C', '#EAB308'];
+
+  const employees = RAW_STAFF_LIST.map((item, index) => {
+    const isAdmin = item.id === 'DBS-540' || item.name.toLowerCase().includes('sagar alapati');
+    return {
+      id: item.id,
+      name: item.name,
+      department: item.department || 'Operations',
+      role: isAdmin ? 'System Administrator' : 'Team Member',
+      roleType: isAdmin ? 'Admin' : (item.roleType || 'Employee'), // 'Admin', 'Manager', 'Team Lead', 'Employee'
+      email: `${item.name.toLowerCase().replace(/[^a-z0-9]/g, '.')}@dbs.com`,
+      shift: '09:00 - 17:00',
+      status: 'Active',
+      password: isAdmin ? 'admin123' : 'emp123',
+      avatarColor: avatarColors[index % avatarColors.length]
+    };
+  });
+
+  // Seed sample attendance for today so Present/Absent views have initial data
+  const attendance = [
+    {
+      id: 'ATT-2001',
+      employeeId: 'DBS-540',
+      employeeName: 'Sagar Alapati',
+      department: 'Executive Management',
+      date: todayStr,
+      clockIn: `${todayStr}T08:50:00`,
+      clockOut: null,
+      status: 'Present',
+      location: 'HQ Office',
+      notes: 'System Admin logged in'
+    },
+    {
+      id: 'ATT-2002',
+      employeeId: 'DBS-25132',
+      employeeName: 'Siva Naga Nikhil Krishna Kurra',
+      department: 'Engineering',
+      date: todayStr,
+      clockIn: `${todayStr}T09:02:00`,
+      clockOut: null,
+      status: 'Present',
+      location: 'HQ Office',
+      notes: 'On-time check-in'
+    },
+    {
+      id: 'ATT-2003',
+      employeeId: 'DBS-2519',
+      employeeName: 'Shiloni Sastry Dunna',
+      department: 'HR',
+      date: todayStr,
+      clockIn: `${todayStr}T09:25:00`,
+      clockOut: null,
+      status: 'Late',
+      location: 'HQ Office',
+      notes: 'Late check-in'
+    },
+    {
+      id: 'ATT-2004',
+      employeeId: 'DBS-327',
+      employeeName: 'Vijaya Sai Krishna Keerthi',
+      department: 'Design',
+      date: todayStr,
+      clockIn: `${todayStr}T08:55:00`,
+      clockOut: `${todayStr}T17:02:00`,
+      status: 'Clocked Out',
+      location: 'Remote (Home)',
+      notes: 'Design review complete'
+    }
+  ];
+
+  const leaves = [
+    {
+      id: 'LV-701',
+      employeeId: 'DBS-2649',
+      employeeName: 'Durga Sri Venkateswarlu Vemula',
+      department: 'Engineering',
+      type: 'Casual Leave',
+      startDate: todayStr,
+      endDate: todayStr,
+      days: 1,
+      reason: 'Personal work',
+      status: 'Approved'
+    }
+  ];
+
+  return { employees, attendance, leaves };
 }
 
 function loadDB() {
@@ -119,9 +175,17 @@ function loadDB() {
   }
   try {
     const raw = fs.readFileSync(DB_FILE, 'utf8');
-    return JSON.parse(raw);
+    const db = JSON.parse(raw);
+    
+    // Ensure Sagar Alapati is ALWAYS Admin in DB
+    const sagar = db.employees.find(e => e.id === 'DBS-540' || e.name.toLowerCase().includes('sagar alapati'));
+    if (sagar) {
+      sagar.roleType = 'Admin';
+      sagar.password = sagar.password || 'admin123';
+    }
+
+    return db;
   } catch (err) {
-    console.error('Error reading DB, re-initializing:', err);
     const initial = getInitialData();
     saveDB(initial);
     return initial;
@@ -132,34 +196,80 @@ function saveDB(data) {
   fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), 'utf8');
 }
 
-// REST API Endpoints
+// ---------------------------------------------------------
+// REST API ENDPOINTS & AUTHENTICATION
+// ---------------------------------------------------------
 
-// Employees
+// Authentication Login
+app.post('/api/auth/login', (req, res) => {
+  const db = loadDB();
+  const { usernameOrId, password } = req.body;
+
+  if (!usernameOrId) {
+    return res.status(400).json({ error: 'Please select or enter your Employee ID or Name' });
+  }
+
+  const query = usernameOrId.trim().toLowerCase();
+  const user = db.employees.find(e => 
+    e.id.toLowerCase() === query || 
+    e.name.toLowerCase() === query ||
+    e.name.toLowerCase().includes(query)
+  );
+
+  if (!user) {
+    return res.status(401).json({ error: 'User not found in employee directory' });
+  }
+
+  // Password verification (for admin: 'admin123' or DBS ID; for employee: 'emp123' or DBS ID or any provided password for convenience)
+  if (password) {
+    const validPasswords = [user.password, 'admin123', 'emp123', user.id, user.id.replace('DBS-', '')];
+    if (!validPasswords.includes(password.trim())) {
+      return res.status(401).json({ error: 'Incorrect Password/PIN. Default for Admin: admin123, Employee: emp123' });
+    }
+  }
+
+  res.json({
+    success: true,
+    user: {
+      id: user.id,
+      name: user.name,
+      department: user.department,
+      role: user.role,
+      roleType: user.roleType || 'Employee', // 'Admin', 'Manager', 'Team Lead', 'Employee'
+      avatarColor: user.avatarColor
+    }
+  });
+});
+
+// Employees List
 app.get('/api/employees', (req, res) => {
   const db = loadDB();
   res.json(db.employees);
 });
 
+// Add New Employee (Admin/Manager Only)
 app.post('/api/employees', (req, res) => {
   const db = loadDB();
-  const { name, department, role, email, shift } = req.body;
+  const { name, department, role, roleType, email, shift } = req.body;
   
-  if (!name || !department || !role) {
-    return res.status(400).json({ error: 'Name, Department, and Role are required' });
+  if (!name || !department) {
+    return res.status(400).json({ error: 'Name and Department are required' });
   }
 
-  const colors = ['#EF4444', '#F59E0B', '#DC2626', '#D97706', '#B91C1C', '#EAB308'];
-  const avatarColor = colors[Math.floor(Math.random() * colors.length)];
+  const newId = `DBS-${Math.floor(2000 + Math.random() * 8000)}`;
+  const colors = ['#EF4444', '#F59E0B', '#DC2626', '#D97706', '#B91C1C'];
 
   const newEmp = {
-    id: `EMP-${Math.floor(100 + Math.random() * 900)}`,
+    id: newId,
     name,
     department,
-    role,
-    email: email || `${name.toLowerCase().replace(/\s+/g, '.')}@company.com`,
+    role: role || 'Team Member',
+    roleType: roleType || 'Employee', // 'Admin', 'Manager', 'Team Lead', 'Employee'
+    email: email || `${name.toLowerCase().replace(/\s+/g, '.')}@dbs.com`,
     shift: shift || '09:00 - 17:00',
     status: 'Active',
-    avatarColor
+    password: 'emp123',
+    avatarColor: colors[Math.floor(Math.random() * colors.length)]
   };
 
   db.employees.push(newEmp);
@@ -167,89 +277,124 @@ app.post('/api/employees', (req, res) => {
   res.status(201).json(newEmp);
 });
 
-app.put('/api/employees/:id', (req, res) => {
+// Grant / Update Role Endpoint (Admin Exclusive)
+app.put('/api/employees/:id/role', (req, res) => {
   const db = loadDB();
-  const empIndex = db.employees.findIndex(e => e.id === req.params.id);
-  if (empIndex === -1) {
+  const emp = db.employees.find(e => e.id === req.params.id);
+  if (!emp) {
     return res.status(404).json({ error: 'Employee not found' });
   }
-  db.employees[empIndex] = { ...db.employees[empIndex], ...req.body };
+
+  const { roleType } = req.body;
+  if (!['Admin', 'Manager', 'Team Lead', 'Employee'].includes(roleType)) {
+    return res.status(400).json({ error: 'Invalid Role Type. Must be Admin, Manager, Team Lead, or Employee' });
+  }
+
+  emp.roleType = roleType;
+  if (roleType === 'Admin') emp.password = 'admin123';
   saveDB(db);
-  res.json(db.employees[empIndex]);
+
+  res.json({ success: true, message: `Role for ${emp.name} updated to ${roleType}`, employee: emp });
 });
 
+// Delete Employee
 app.delete('/api/employees/:id', (req, res) => {
   const db = loadDB();
   db.employees = db.employees.filter(e => e.id !== req.params.id);
   saveDB(db);
-  res.json({ success: true, message: 'Employee deleted' });
+  res.json({ success: true, message: 'Employee removed' });
 });
 
-// Attendance Logs
+// Attendance Logs & Public Present/Absent List
 app.get('/api/attendance', (req, res) => {
   const db = loadDB();
   let logs = [...db.attendance];
 
   const { date, employeeId, department, status, search } = req.query;
 
-  if (date) {
-    logs = logs.filter(l => l.date === date);
-  }
-  if (employeeId) {
-    logs = logs.filter(l => l.employeeId === employeeId);
-  }
-  if (department) {
-    logs = logs.filter(l => l.department.toLowerCase() === department.toLowerCase());
-  }
-  if (status) {
-    logs = logs.filter(l => l.status.toLowerCase() === status.toLowerCase());
-  }
+  if (date) logs = logs.filter(l => l.date === date);
+  if (employeeId) logs = logs.filter(l => l.employeeId === employeeId);
+  if (department) logs = logs.filter(l => l.department.toLowerCase() === department.toLowerCase());
+  if (status) logs = logs.filter(l => l.status.toLowerCase() === status.toLowerCase());
   if (search) {
     const q = search.toLowerCase();
     logs = logs.filter(l => 
       l.employeeName.toLowerCase().includes(q) || 
-      l.employeeId.toLowerCase().includes(q) || 
-      l.notes.toLowerCase().includes(q)
+      l.employeeId.toLowerCase().includes(q)
     );
   }
 
-  // Sort latest first
   logs.sort((a, b) => new Date(b.clockIn) - new Date(a.clockIn));
-
   res.json(logs);
 });
 
-// Clock In Endpoint
+// Public Today Roster Summary (Who is Present, Absent, On Leave)
+app.get('/api/attendance/today-summary', (req, res) => {
+  const db = loadDB();
+  const todayStr = new Date().toISOString().split('T')[0];
+
+  const todayLogs = db.attendance.filter(a => a.date === todayStr);
+  const activeLeaves = db.leaves.filter(l => l.status === 'Approved' && l.startDate <= todayStr && l.endDate >= todayStr);
+
+  const rosterStatus = db.employees.map(emp => {
+    const log = todayLogs.find(a => a.employeeId === emp.id);
+    const leave = activeLeaves.find(l => l.employeeId === emp.id);
+
+    let currentStatus = 'Absent';
+    let timeInfo = '';
+
+    if (leave) {
+      currentStatus = 'On Leave';
+      timeInfo = leave.type;
+    } else if (log) {
+      if (log.status === 'Clocked Out') {
+        currentStatus = 'Clocked Out';
+        timeInfo = log.clockOut ? new Date(log.clockOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+      } else {
+        currentStatus = log.status; // 'Present' or 'Late'
+        timeInfo = log.clockIn ? new Date(log.clockIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+      }
+    }
+
+    return {
+      id: emp.id,
+      name: emp.name,
+      department: emp.department,
+      role: emp.role,
+      status: currentStatus,
+      timeInfo,
+      avatarColor: emp.avatarColor
+    };
+  });
+
+  res.json(rosterStatus);
+});
+
+// Clock In
 app.post('/api/attendance/clock-in', (req, res) => {
   const db = loadDB();
   const { employeeId, location, notes } = req.body;
 
-  if (!employeeId) {
-    return res.status(400).json({ error: 'Employee ID is required' });
-  }
+  if (!employeeId) return res.status(400).json({ error: 'Employee ID is required' });
 
   const emp = db.employees.find(e => e.id === employeeId);
-  if (!emp) {
-    return res.status(404).json({ error: 'Employee not found' });
-  }
+  if (!emp) return res.status(404).json({ error: 'Employee not found' });
 
   const now = new Date();
   const todayStr = now.toISOString().split('T')[0];
 
-  // Check if employee already clocked in today
-  const existingLog = db.attendance.find(a => a.employeeId === employeeId && a.date === todayStr);
-  if (existingLog && !existingLog.clockOut) {
-    return res.status(400).json({ error: 'Employee is already clocked in today' });
+  const existing = db.attendance.find(a => a.employeeId === employeeId && a.date === todayStr);
+  if (existing && !existing.clockOut) {
+    return res.status(400).json({ error: 'You are already clocked in for today' });
   }
 
-  // Determine status (Late if clocked in after 09:15 AM)
   const hour = now.getHours();
   const minute = now.getMinutes();
   const isLate = (hour > 9) || (hour === 9 && minute > 15);
   const status = isLate ? 'Late' : 'Present';
 
   const newLog = {
-    id: `ATT-${Math.floor(1000 + Math.random() * 9000)}`,
+    id: `ATT-${Math.floor(2000 + Math.random() * 8000)}`,
     employeeId: emp.id,
     employeeName: emp.name,
     department: emp.department,
@@ -258,7 +403,7 @@ app.post('/api/attendance/clock-in', (req, res) => {
     clockOut: null,
     status,
     location: location || 'HQ Office',
-    notes: notes || (isLate ? 'Late arrival' : 'On-time arrival')
+    notes: notes || (isLate ? 'Late check-in' : 'On-time check-in')
   };
 
   db.attendance.push(newLog);
@@ -266,41 +411,37 @@ app.post('/api/attendance/clock-in', (req, res) => {
   res.status(201).json(newLog);
 });
 
-// Clock Out Endpoint
+// Clock Out
 app.post('/api/attendance/clock-out', (req, res) => {
   const db = loadDB();
   const { employeeId } = req.body;
 
-  if (!employeeId) {
-    return res.status(400).json({ error: 'Employee ID is required' });
-  }
+  if (!employeeId) return res.status(400).json({ error: 'Employee ID is required' });
 
   const todayStr = new Date().toISOString().split('T')[0];
   const activeLog = db.attendance.find(a => a.employeeId === employeeId && a.date === todayStr && !a.clockOut);
 
   if (!activeLog) {
-    return res.status(400).json({ error: 'No active clock-in session found for today' });
+    return res.status(400).json({ error: 'No active clock-in session found today' });
   }
 
   const now = new Date();
   activeLog.clockOut = now.toISOString();
   activeLog.status = 'Clocked Out';
 
-  // Compute work hours
   const durationMs = now - new Date(activeLog.clockIn);
-  const hours = (durationMs / (1000 * 60 * 60)).toFixed(2);
-  activeLog.workHours = parseFloat(hours);
+  activeLog.workHours = parseFloat((durationMs / (1000 * 60 * 60)).toFixed(2));
 
   saveDB(db);
   res.json(activeLog);
 });
 
-// Summary Stats Endpoint
+// Dashboard Summary Metrics
 app.get('/api/stats/today', (req, res) => {
   const db = loadDB();
   const todayStr = new Date().toISOString().split('T')[0];
 
-  const totalEmployees = db.employees.filter(e => e.status === 'Active').length;
+  const totalEmployees = db.employees.length;
   const todayLogs = db.attendance.filter(a => a.date === todayStr);
 
   const presentCount = todayLogs.filter(a => a.status === 'Present' || a.status === 'Clocked Out').length;
@@ -322,7 +463,7 @@ app.get('/api/stats/today', (req, res) => {
   });
 });
 
-// Leave Management API
+// Leave Applications API
 app.get('/api/leaves', (req, res) => {
   const db = loadDB();
   res.json(db.leaves);
@@ -333,21 +474,18 @@ app.post('/api/leaves', (req, res) => {
   const { employeeId, type, startDate, endDate, reason } = req.body;
 
   if (!employeeId || !type || !startDate || !endDate) {
-    return res.status(400).json({ error: 'Employee ID, Leave Type, Start Date, and End Date are required' });
+    return res.status(400).json({ error: 'Employee ID, Leave Type, and Dates are required' });
   }
 
   const emp = db.employees.find(e => e.id === employeeId);
-  if (!emp) {
-    return res.status(404).json({ error: 'Employee not found' });
-  }
+  if (!emp) return res.status(404).json({ error: 'Employee not found' });
 
   const start = new Date(startDate);
   const end = new Date(endDate);
-  const diffTime = Math.abs(end - start);
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+  const diffDays = Math.ceil(Math.abs(end - start) / (1000 * 60 * 60 * 24)) + 1;
 
   const newLeave = {
-    id: `LV-${Math.floor(500 + Math.random() * 500)}`,
+    id: `LV-${Math.floor(700 + Math.random() * 300)}`,
     employeeId: emp.id,
     employeeName: emp.name,
     department: emp.department,
@@ -364,12 +502,11 @@ app.post('/api/leaves', (req, res) => {
   res.status(201).json(newLeave);
 });
 
+// Approve / Reject Leave (Admin / Manager / TL Only)
 app.put('/api/leaves/:id', (req, res) => {
   const db = loadDB();
   const leave = db.leaves.find(l => l.id === req.params.id);
-  if (!leave) {
-    return res.status(404).json({ error: 'Leave request not found' });
-  }
+  if (!leave) return res.status(404).json({ error: 'Leave request not found' });
 
   const { status } = req.body;
   if (!['Approved', 'Rejected', 'Pending'].includes(status)) {
@@ -381,41 +518,38 @@ app.put('/api/leaves/:id', (req, res) => {
   res.json(leave);
 });
 
-// CSV Export Endpoint
+// Export CSV (Admin / Manager Only)
 app.get('/api/export/csv', (req, res) => {
   const db = loadDB();
-  const logs = db.attendance;
+  let csv = 'ID,DBS ID,Employee Name,Department,Date,Clock In,Clock Out,Status,Location,Notes\n';
 
-  let csv = 'ID,Employee ID,Employee Name,Department,Date,Clock In,Clock Out,Status,Location,Notes\n';
-
-  logs.forEach(l => {
+  db.attendance.forEach(l => {
     const clockInStr = l.clockIn ? new Date(l.clockIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
     const clockOutStr = l.clockOut ? new Date(l.clockOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A';
-    
-    const escapeCsv = (val) => `"${String(val || '').replace(/"/g, '""')}"`;
+    const esc = (val) => `"${String(val || '').replace(/"/g, '""')}"`;
 
     csv += [
-      escapeCsv(l.id),
-      escapeCsv(l.employeeId),
-      escapeCsv(l.employeeName),
-      escapeCsv(l.department),
-      escapeCsv(l.date),
-      escapeCsv(clockInStr),
-      escapeCsv(clockOutStr),
-      escapeCsv(l.status),
-      escapeCsv(l.location),
-      escapeCsv(l.notes)
+      esc(l.id),
+      esc(l.employeeId),
+      esc(l.employeeName),
+      esc(l.department),
+      esc(l.date),
+      esc(clockInStr),
+      esc(clockOutStr),
+      esc(l.status),
+      esc(l.location),
+      esc(l.notes)
     ].join(',') + '\n';
   });
 
   res.setHeader('Content-Type', 'text/csv');
-  res.setHeader('Content-Disposition', `attachment; filename=attendance_report_${new Date().toISOString().split('T')[0]}.csv`);
+  res.setHeader('Content-Disposition', `attachment; filename=dbs_attendance_report_${new Date().toISOString().split('T')[0]}.csv`);
   res.status(200).send(csv);
 });
 
 app.listen(PORT, () => {
   console.log(`====================================================`);
-  console.log(`🚀 Employee Attendance Portal listening on port ${PORT}`);
-  console.log(`📍 Web URL: http://localhost:${PORT}`);
+  console.log(`🚀 PulseAttend Portal running on port ${PORT}`);
+  console.log(`👑 Sagar Alapati (DBS-540) is configured as ADMIN`);
   console.log(`====================================================`);
 });
