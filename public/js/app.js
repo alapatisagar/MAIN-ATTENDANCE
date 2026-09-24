@@ -57,6 +57,13 @@ function showAppScreen() {
     if (avatar) avatar.textContent = getInitials(user.name);
   }
 
+  const savedActiveDate = sessionStorage.getItem('arcallers_active_date');
+  if (savedActiveDate) {
+    state.selectedDate = savedActiveDate;
+    const dateInput = document.getElementById('selectedDateInput');
+    if (dateInput) dateInput.value = savedActiveDate;
+  }
+
   fetchAttendanceForDate();
 }
 
@@ -158,6 +165,7 @@ function handleDateChange() {
   const dateInput = document.getElementById('selectedDateInput');
   if (dateInput && dateInput.value) {
     state.selectedDate = dateInput.value;
+    sessionStorage.setItem('arcallers_active_date', dateInput.value);
     fetchAttendanceForDate();
   }
 }
@@ -167,6 +175,7 @@ function changeDateByOffset(offsetDays) {
   currentDate.setDate(currentDate.getDate() + offsetDays);
   const newDateStr = currentDate.toISOString().split('T')[0];
   state.selectedDate = newDateStr;
+  sessionStorage.setItem('arcallers_active_date', newDateStr);
   const dateInput = document.getElementById('selectedDateInput');
   if (dateInput) dateInput.value = newDateStr;
   fetchAttendanceForDate();
@@ -179,6 +188,7 @@ function jumpToDate(target) {
   }
   const dateStr = d.toISOString().split('T')[0];
   state.selectedDate = dateStr;
+  sessionStorage.setItem('arcallers_active_date', dateStr);
   const dateInput = document.getElementById('selectedDateInput');
   if (dateInput) dateInput.value = dateStr;
   fetchAttendanceForDate();
