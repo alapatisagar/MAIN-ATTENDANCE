@@ -41,15 +41,15 @@
     },
     {
       "id": "DBS-327",
-      "name": "Vijaya Sai Krishna Keerthi",
-      "phone": "",
+      "name": "VIJAYA SAI KRISHNA KEERTHI",
+      "phone": "7569258789",
       "department": "AR Callers",
       "role": "Team Member",
-      "roleType": "Employee",
+      "roleType": "Admin",
       "email": "vijaya.sai.krishna.keerthi@dbs.com",
       "shift": "09:00 - 17:00",
       "status": "Active",
-      "passwordHash": "0492afff1f29740631f3d76b1db64bf5cff3221855b83b6b10bee05d83c49d1aaea98c77dc589af8b3366f5422e96b57a59e8f19ca6ade6d9b2ba28ed5f09ced",
+      "passwordHash": "e35094099cdc92eb3f04f7772ef2caa93dde222853d8ab0c3976ca76d53744d4069ac50a93c68c4105eba56f3e8168e001adc036f64ec586d015c49d143aa11d",
       "avatarColor": "#D97706"
     },
     {
@@ -652,7 +652,7 @@
     },
     {
       "id": "DBS-540",
-      "name": "Sagar Alapati",
+      "name": "SAGAR ALAPATI",
       "phone": "9704225352",
       "department": "AR Callers",
       "role": "System Administrator",

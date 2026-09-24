@@ -280,7 +280,7 @@ function renderAttendanceTable() {
           </div>
         </td>
         <td class="text-right">
-          ${emp.employeeId !== 'DBS-540' && emp.employeeId !== 'DBS-7569' ? `
+          ${emp.employeeId !== 'DBS-540' && emp.employeeId !== 'DBS-327' && emp.employeeId !== 'DBS-7569' ? `
             <button class="btn-delete" onclick="handleDeleteEmployee('${emp.employeeId}', '${escapeHTML(emp.name)}')" title="Delete Employee">
               <i class="fa-solid fa-trash-can"></i>
             </button>

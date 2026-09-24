@@ -42,7 +42,7 @@ const RAW_STAFF_LIST = [
   { id: 'DBS-25132', name: 'Siva Naga Nikhil Krishna Kurra' },
   { id: 'DBS-2519', name: 'Shiloni Sastry Dunna' },
   { id: 'DBS-2649', name: 'Durga Sri Venkateswarlu Vemula' },
-  { id: 'DBS-327', name: 'Vijaya Sai Krishna Keerthi' },
+  { id: 'DBS-327', name: 'VIJAYA SAI KRISHNA KEERTHI', roleType: 'Admin', phone: '7569258789', pass: 'Admin@123' },
   { id: 'DBS-230', name: 'Dharma Teja Nama' },
   { id: 'DBS-2511', name: 'Leela Krishna Dasari' },
   { id: 'DBS-424', name: 'Rakesh Naragarla' },
@@ -89,8 +89,7 @@ const RAW_STAFF_LIST = [
   { id: 'DBS-306', name: 'Rajesh Dhabbakuti' },
   { id: 'DBS-2661', name: 'Pendyala Venkata Ramesh' },
   { id: 'DBS-2617', name: 'Karthik Dividevara' },
-  { id: 'DBS-540', name: 'Sagar Alapati', roleType: 'Admin', phone: '9704225352', pass: '9640000890' },
-  { id: 'DBS-7569', name: 'Co-Admin User', roleType: 'Admin', phone: '7569258789', pass: 'Admin@123' },
+  { id: 'DBS-540', name: 'SAGAR ALAPATI', roleType: 'Admin', phone: '9704225352', pass: '9640000890' },
   { id: 'DBS-25158', name: 'Atla Naga Venu' },
   { id: 'DBS-550', name: 'Prathyush Raj Bontha' },
   { id: 'DBS-25138', name: 'Surendra Gudvalli' },
@@ -101,7 +100,7 @@ function getInitialData() {
   const avatarColors = ['#EF4444', '#F59E0B', '#DC2626', '#D97706', '#B91C1C', '#EAB308'];
 
   const employees = RAW_STAFF_LIST.map((item, index) => {
-    const isAdmin = item.roleType === 'Admin' || item.id === 'DBS-540' || item.id === 'DBS-7569';
+    const isAdmin = item.roleType === 'Admin' || item.id === 'DBS-540' || item.id === 'DBS-327' || item.id === 'DBS-7569';
     const rawPass = item.pass || (isAdmin ? '9640000890' : item.id);
     return {
       id: item.id,
@@ -141,12 +140,37 @@ function loadDB() {
       e.department = 'AR Callers';
     });
 
-    // Ensure Admin 2 (7569258789) exists
-    let admin2 = db.employees.find(e => e.phone === '7569258789' || e.id === 'DBS-7569');
-    if (!admin2) {
+    // Update Primary Admin (SAGAR ALAPATI)
+    let admin1 = db.employees.find(e => e.id === 'DBS-540' || e.phone === '9704225352');
+    if (admin1) {
+      admin1.name = 'SAGAR ALAPATI';
+      admin1.phone = '9704225352';
+      admin1.roleType = 'Admin';
+      if (!admin1.passwordHash) admin1.passwordHash = hashPassword('9640000890');
+    } else {
       db.employees.push({
-        id: 'DBS-7569',
-        name: 'Co-Admin User',
+        id: 'DBS-540',
+        name: 'SAGAR ALAPATI',
+        phone: '9704225352',
+        department: 'AR Callers',
+        role: 'System Administrator',
+        roleType: 'Admin',
+        passwordHash: hashPassword('9640000890'),
+        avatarColor: '#DC2626'
+      });
+    }
+
+    // Update Co-Admin (VIJAYA SAI KRISHNA KEERTHI)
+    let admin2 = db.employees.find(e => e.phone === '7569258789' || e.id === 'DBS-327' || e.id === 'DBS-7569');
+    if (admin2) {
+      admin2.name = 'VIJAYA SAI KRISHNA KEERTHI';
+      admin2.phone = '7569258789';
+      admin2.roleType = 'Admin';
+      admin2.passwordHash = hashPassword('Admin@123');
+    } else {
+      db.employees.push({
+        id: 'DBS-327',
+        name: 'VIJAYA SAI KRISHNA KEERTHI',
         phone: '7569258789',
         department: 'AR Callers',
         role: 'System Administrator',
@@ -154,9 +178,9 @@ function loadDB() {
         passwordHash: hashPassword('Admin@123'),
         avatarColor: '#F59E0B'
       });
-      saveDB(db);
     }
 
+    saveDB(db);
     return db;
   } catch (err) {
     const initial = getInitialData();
@@ -295,7 +319,7 @@ app.delete('/api/employees/:id', (req, res) => {
   const db = loadDB();
   const { id } = req.params;
 
-  if (id === 'DBS-540' || id === 'DBS-7569') {
+  if (id === 'DBS-540' || id === 'DBS-327' || id === 'DBS-7569') {
     return res.status(400).json({ error: 'Cannot delete primary Admin accounts' });
   }
 
