@@ -230,6 +230,9 @@ function renderAttendanceTable() {
     return matchSearch && matchTab;
   });
 
+  // Sort employees numerically by DBS ID integer value
+  filtered.sort((a, b) => extractDBSNum(a.employeeId) - extractDBSNum(b.employeeId));
+
   if (filtered.length === 0) {
     tbody.innerHTML = `
       <tr>
@@ -526,4 +529,9 @@ function showToast(message, type = 'success') {
   setTimeout(() => {
     toast.remove();
   }, 4000);
+}
+
+function extractDBSNum(idStr) {
+  const match = String(idStr || '').match(/\d+/);
+  return match ? parseInt(match[0], 10) : 999999;
 }

@@ -37,7 +37,21 @@ function hashPassword(password) {
   return crypto.pbkdf2Sync(password, salt, 10000, 64, 'sha512').toString('hex');
 }
 
-// 55 Real DBS Employees List + Admin Accounts
+// Numerical DBS ID Sorting Helper
+function extractDBSNum(idStr) {
+  const match = String(idStr || '').match(/\d+/);
+  return match ? parseInt(match[0], 10) : 999999;
+}
+
+function sortNumerically(list) {
+  return list.sort((a, b) => {
+    const numA = extractDBSNum(a.id || a.employeeId);
+    const numB = extractDBSNum(b.id || b.employeeId);
+    return numA - numB;
+  });
+}
+
+// 55 Real DBS Employees List (All in AR Callers Department)
 const RAW_STAFF_LIST = [
   { id: 'DBS-25132', name: 'Siva Naga Nikhil Krishna Kurra' },
   { id: 'DBS-2519', name: 'Shiloni Sastry Dunna' },
@@ -99,8 +113,8 @@ const RAW_STAFF_LIST = [
 function getInitialData() {
   const avatarColors = ['#EF4444', '#F59E0B', '#DC2626', '#D97706', '#B91C1C', '#EAB308'];
 
-  const employees = RAW_STAFF_LIST.map((item, index) => {
-    const isAdmin = item.roleType === 'Admin' || item.id === 'DBS-540' || item.id === 'DBS-327' || item.id === 'DBS-7569';
+  let employees = RAW_STAFF_LIST.map((item, index) => {
+    const isAdmin = item.roleType === 'Admin' || item.id === 'DBS-540' || item.id === 'DBS-327';
     const rawPass = item.pass || (isAdmin ? '9640000890' : item.id);
     return {
       id: item.id,
@@ -113,6 +127,8 @@ function getInitialData() {
       avatarColor: avatarColors[index % avatarColors.length]
     };
   });
+
+  sortNumerically(employees);
 
   return {
     employees,
@@ -134,6 +150,9 @@ function loadDB() {
       saveDB(initial);
       return initial;
     }
+
+    // Remove legacy co-admin DBS-7569
+    db.employees = db.employees.filter(e => e.id !== 'DBS-7569');
 
     // Force all employees to AR Callers department
     db.employees.forEach(e => {
@@ -161,8 +180,9 @@ function loadDB() {
     }
 
     // Update Co-Admin (VIJAYA SAI KRISHNA KEERTHI)
-    let admin2 = db.employees.find(e => e.phone === '7569258789' || e.id === 'DBS-327' || e.id === 'DBS-7569');
+    let admin2 = db.employees.find(e => e.phone === '7569258789' || e.id === 'DBS-327');
     if (admin2) {
+      admin2.id = 'DBS-327';
       admin2.name = 'VIJAYA SAI KRISHNA KEERTHI';
       admin2.phone = '7569258789';
       admin2.roleType = 'Admin';
@@ -180,6 +200,7 @@ function loadDB() {
       });
     }
 
+    sortNumerically(db.employees);
     saveDB(db);
     return db;
   } catch (err) {
@@ -190,6 +211,9 @@ function loadDB() {
 }
 
 function saveDB(data) {
+  if (data && data.employees) {
+    sortNumerically(data.employees);
+  }
   fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), 'utf8');
 }
 
@@ -276,9 +300,10 @@ app.put('/api/auth/change-password', (req, res) => {
   });
 });
 
-// 2. Get All Employees List
+// 2. Get All Employees List (Sorted Numerically by DBS ID)
 app.get('/api/employees', (req, res) => {
   const db = loadDB();
+  sortNumerically(db.employees);
   res.json(db.employees);
 });
 
@@ -309,6 +334,7 @@ app.post('/api/employees', (req, res) => {
   };
 
   db.employees.push(newEmp);
+  sortNumerically(db.employees);
   saveDB(db);
 
   res.status(201).json(newEmp);
@@ -319,7 +345,7 @@ app.delete('/api/employees/:id', (req, res) => {
   const db = loadDB();
   const { id } = req.params;
 
-  if (id === 'DBS-540' || id === 'DBS-327' || id === 'DBS-7569') {
+  if (id === 'DBS-540' || id === 'DBS-327') {
     return res.status(400).json({ error: 'Cannot delete primary Admin accounts' });
   }
 
@@ -334,7 +360,7 @@ app.delete('/api/employees/:id', (req, res) => {
   res.json({ success: true, deleted });
 });
 
-// 5. Get Attendance Records for a Specific Date (Saturday & Sunday Default Off)
+// 5. Get Attendance Records for a Specific Date (Sorted Numerically)
 app.get('/api/attendance', (req, res) => {
   const db = loadDB();
   const targetDate = req.query.date || new Date().toISOString().split('T')[0];
@@ -342,6 +368,8 @@ app.get('/api/attendance', (req, res) => {
   const dateObj = new Date(targetDate + 'T00:00:00');
   const dayOfWeek = dateObj.getDay();
   const isWeekend = (dayOfWeek === 0 || dayOfWeek === 6);
+
+  sortNumerically(db.employees);
 
   const records = db.employees.map(emp => {
     const att = (db.attendance || []).find(a => a.employeeId === emp.id && a.date === targetDate);
@@ -366,7 +394,7 @@ app.get('/api/attendance', (req, res) => {
   });
 });
 
-// 6. Mark Single Employee Attendance (Present, Absent, Half Day, Holiday / Off)
+// 6. Mark Single Employee Attendance
 app.post('/api/attendance/mark', (req, res) => {
   const db = loadDB();
   const { employeeId, date, status, notes } = req.body;
@@ -492,13 +520,15 @@ app.post('/api/attendance/auto-present-remaining', (req, res) => {
   });
 });
 
-// 8. Export Monthly Attendance Excel / CSV Report
+// 8. Export Monthly Attendance Excel / CSV Report (Sorted Numerically by DBS ID)
 app.get('/api/export/monthly-excel', (req, res) => {
   const db = loadDB();
   const monthQuery = req.query.month || new Date().toISOString().substring(0, 7);
 
   const attendanceList = db.attendance || [];
   const monthRecords = attendanceList.filter(a => a.date && a.date.startsWith(monthQuery));
+
+  sortNumerically(db.employees);
 
   const summary = db.employees.map(emp => {
     const empRecords = monthRecords.filter(a => a.employeeId === emp.id);
@@ -547,7 +577,8 @@ app.get('/api/export/monthly-excel', (req, res) => {
 app.listen(PORT, () => {
   console.log(`====================================================`);
   console.log(`🚀 AR Callers Attendance Portal running on port ${PORT}`);
-  console.log(`👤 Primary Admin: 9704225352 / 9640000890`);
-  console.log(`👤 Co-Admin: 7569258789 / Admin@123`);
+  console.log(`🔢 Roster Sorted Numerically by DBS ID`);
+  console.log(`👤 Primary Admin: SAGAR ALAPATI (9704225352 / 9640000890)`);
+  console.log(`👤 Co-Admin: VIJAYA SAI KRISHNA KEERTHI (7569258789 / Admin@123)`);
   console.log(`====================================================`);
 });
