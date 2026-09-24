@@ -37,63 +37,63 @@ function hashPassword(password) {
   return crypto.pbkdf2Sync(password, salt, 10000, 64, 'sha512').toString('hex');
 }
 
-// 55 Real DBS Employees List
+// 55 Real DBS Employees List (All in AR Callers Department)
 const RAW_STAFF_LIST = [
-  { id: 'DBS-25132', name: 'Siva Naga Nikhil Krishna Kurra', department: 'Engineering' },
-  { id: 'DBS-2519', name: 'Shiloni Sastry Dunna', department: 'HR' },
-  { id: 'DBS-2649', name: 'Durga Sri Venkateswarlu Vemula', department: 'Engineering' },
-  { id: 'DBS-327', name: 'Vijaya Sai Krishna Keerthi', department: 'Design' },
-  { id: 'DBS-230', name: 'Dharma Teja Nama', department: 'Engineering' },
-  { id: 'DBS-2511', name: 'Leela Krishna Dasari', department: 'Engineering' },
-  { id: 'DBS-424', name: 'Rakesh Naragarla', department: 'Operations' },
-  { id: 'DBS-352', name: 'Vijaya Bhaskar Devarapalli', department: 'Operations' },
-  { id: 'DBS-2668', name: 'Emani Rakesh', department: 'Sales' },
-  { id: 'DBS-25159', name: 'Annavarapu Abhishek', department: 'Engineering' },
-  { id: 'DBS-548', name: 'Praneeth Raj Bontha', department: 'Engineering' },
-  { id: 'DBS-568', name: 'Venkata Ramesh Polisetty', department: 'Operations' },
-  { id: 'DBS-549', name: 'Srinivas Mannem', department: 'Operations' },
-  { id: 'DBS-433', name: 'Satyanarayana Reddy Akkala', department: 'Sales' },
-  { id: 'DBS-2690', name: 'Nuthalapati Karthik Teja', department: 'Design' },
-  { id: 'DBS-560', name: 'Anilkumar Ullamgunta', department: 'Engineering' },
-  { id: 'DBS-2613', name: 'Naga Sasidhar Reddy Akkala', department: 'Engineering' },
-  { id: 'DBS-554', name: 'Purna Venkata Krishna Sai Pattem', department: 'Engineering' },
-  { id: 'DBS-2639', name: 'Shaik Kutubuddin', department: 'Operations' },
-  { id: 'DBS-2514', name: 'Surendra Kolatam', department: 'Operations' },
-  { id: 'DBS-2640', name: 'Lukka Devendra', department: 'Engineering' },
-  { id: 'DBS-2685', name: 'Aradhyula Sai Avinash Babu', department: 'Engineering' },
-  { id: 'DBS-2674', name: 'Mogalipuvvu Ankamma Rao', department: 'Operations' },
-  { id: 'DBS-2555', name: 'Liveeju Borugadda', department: 'Support' },
-  { id: 'DBS-2648', name: 'Aadi Reddy Cheerala', department: 'Engineering' },
-  { id: 'DBS-2669', name: 'Pamu Nagendra Reddy', department: 'Engineering' },
-  { id: 'DBS-2604', name: 'Gattu Navakanth', department: 'Sales' },
-  { id: 'DBS-2605', name: 'Dividevara Naga Babu', department: 'Operations' },
-  { id: 'DBS-512', name: 'Rafi Mahammad', department: 'Support' },
-  { id: 'DBS-2616', name: 'Jaffer Shaik', department: 'Operations' },
-  { id: 'DBS-2684', name: 'Shaik Rehman Beig', department: 'Support' },
-  { id: 'DBS-449', name: 'Jyothi Swaroop Cheemakurti', department: 'Engineering' },
-  { id: 'DBS-466', name: 'Suresh Dabbakuti', department: 'Operations' },
-  { id: 'DBS-2606', name: 'Shaik Jubear Ahammed', department: 'Support' },
-  { id: 'DBS-2615', name: 'Mamilla Sanjay', department: 'Operations' },
-  { id: 'DBS-515', name: 'Mahaboob Subhani Shaik', department: 'Support' },
-  { id: 'DBS-25133', name: 'Mani Varma Pusapati', department: 'Engineering' },
-  { id: 'DBS-2686', name: 'Thatapudi Anvesh Babu', department: 'Engineering' },
-  { id: 'DBS-2512', name: 'Bhavani Shankar Kommuri', department: 'Operations' },
-  { id: 'DBS-2554', name: 'Mohiddin Mohammad', department: 'Support' },
-  { id: 'DBS-513', name: 'Shahid Shaik', department: 'Operations' },
-  { id: 'DBS-514', name: 'Zakeer Hussain Mohammed', department: 'Operations' },
-  { id: 'DBS-25114', name: 'Syam Venkata Sai Naralasetty', department: 'Engineering' },
-  { id: 'DBS-2607', name: 'Gollamudi Yehoshuva', department: 'Engineering' },
-  { id: 'DBS-429', name: 'Durgaprasad Mandava', department: 'Operations' },
-  { id: 'DBS-2530', name: 'Lalith Venkata Sai Kota', department: 'Design' },
-  { id: 'DBS-511', name: 'Fhayaz Ahammad Shaik', department: 'Support' },
-  { id: 'DBS-306', name: 'Rajesh Dhabbakuti', department: 'Operations' },
-  { id: 'DBS-2661', name: 'Pendyala Venkata Ramesh', department: 'Operations' },
-  { id: 'DBS-2617', name: 'Karthik Dividevara', department: 'Engineering' },
-  { id: 'DBS-540', name: 'Sagar Alapati', department: 'Executive Management', roleType: 'Admin', phone: '9704225352' },
-  { id: 'DBS-25158', name: 'Atla Naga Venu', department: 'Operations' },
-  { id: 'DBS-550', name: 'Prathyush Raj Bontha', department: 'Engineering' },
-  { id: 'DBS-25138', name: 'Surendra Gudvalli', department: 'Engineering' },
-  { id: 'DBS-566', name: 'Vijay Kumar Naligila', department: 'Operations' }
+  { id: 'DBS-25132', name: 'Siva Naga Nikhil Krishna Kurra' },
+  { id: 'DBS-2519', name: 'Shiloni Sastry Dunna' },
+  { id: 'DBS-2649', name: 'Durga Sri Venkateswarlu Vemula' },
+  { id: 'DBS-327', name: 'Vijaya Sai Krishna Keerthi' },
+  { id: 'DBS-230', name: 'Dharma Teja Nama' },
+  { id: 'DBS-2511', name: 'Leela Krishna Dasari' },
+  { id: 'DBS-424', name: 'Rakesh Naragarla' },
+  { id: 'DBS-352', name: 'Vijaya Bhaskar Devarapalli' },
+  { id: 'DBS-2668', name: 'Emani Rakesh' },
+  { id: 'DBS-25159', name: 'Annavarapu Abhishek' },
+  { id: 'DBS-548', name: 'Praneeth Raj Bontha' },
+  { id: 'DBS-568', name: 'Venkata Ramesh Polisetty' },
+  { id: 'DBS-549', name: 'Srinivas Mannem' },
+  { id: 'DBS-433', name: 'Satyanarayana Reddy Akkala' },
+  { id: 'DBS-2690', name: 'Nuthalapati Karthik Teja' },
+  { id: 'DBS-560', name: 'Anilkumar Ullamgunta' },
+  { id: 'DBS-2613', name: 'Naga Sasidhar Reddy Akkala' },
+  { id: 'DBS-554', name: 'Purna Venkata Krishna Sai Pattem' },
+  { id: 'DBS-2639', name: 'Shaik Kutubuddin' },
+  { id: 'DBS-2514', name: 'Surendra Kolatam' },
+  { id: 'DBS-2640', name: 'Lukka Devendra' },
+  { id: 'DBS-2685', name: 'Aradhyula Sai Avinash Babu' },
+  { id: 'DBS-2674', name: 'Mogalipuvvu Ankamma Rao' },
+  { id: 'DBS-2555', name: 'Liveeju Borugadda' },
+  { id: 'DBS-2648', name: 'Aadi Reddy Cheerala' },
+  { id: 'DBS-2669', name: 'Pamu Nagendra Reddy' },
+  { id: 'DBS-2604', name: 'Gattu Navakanth' },
+  { id: 'DBS-2605', name: 'Dividevara Naga Babu' },
+  { id: 'DBS-512', name: 'Rafi Mahammad' },
+  { id: 'DBS-2616', name: 'Jaffer Shaik' },
+  { id: 'DBS-2684', name: 'Shaik Rehman Beig' },
+  { id: 'DBS-449', name: 'Jyothi Swaroop Cheemakurti' },
+  { id: 'DBS-466', name: 'Suresh Dabbakuti' },
+  { id: 'DBS-2606', name: 'Shaik Jubear Ahammed' },
+  { id: 'DBS-2615', name: 'Mamilla Sanjay' },
+  { id: 'DBS-515', name: 'Mahaboob Subhani Shaik' },
+  { id: 'DBS-25133', name: 'Mani Varma Pusapati' },
+  { id: 'DBS-2686', name: 'Thatapudi Anvesh Babu' },
+  { id: 'DBS-2512', name: 'Bhavani Shankar Kommuri' },
+  { id: 'DBS-2554', name: 'Mohiddin Mohammad' },
+  { id: 'DBS-513', name: 'Shahid Shaik' },
+  { id: 'DBS-514', name: 'Zakeer Hussain Mohammed' },
+  { id: 'DBS-25114', name: 'Syam Venkata Sai Naralasetty' },
+  { id: 'DBS-2607', name: 'Gollamudi Yehoshuva' },
+  { id: 'DBS-429', name: 'Durgaprasad Mandava' },
+  { id: 'DBS-2530', name: 'Lalith Venkata Sai Kota' },
+  { id: 'DBS-511', name: 'Fhayaz Ahammad Shaik' },
+  { id: 'DBS-306', name: 'Rajesh Dhabbakuti' },
+  { id: 'DBS-2661', name: 'Pendyala Venkata Ramesh' },
+  { id: 'DBS-2617', name: 'Karthik Dividevara' },
+  { id: 'DBS-540', name: 'Sagar Alapati', roleType: 'Admin', phone: '9704225352' },
+  { id: 'DBS-25158', name: 'Atla Naga Venu' },
+  { id: 'DBS-550', name: 'Prathyush Raj Bontha' },
+  { id: 'DBS-25138', name: 'Surendra Gudvalli' },
+  { id: 'DBS-566', name: 'Vijay Kumar Naligila' }
 ];
 
 function getInitialData() {
@@ -106,8 +106,8 @@ function getInitialData() {
       id: item.id,
       name: item.name,
       phone: item.phone || (isAdmin ? '9704225352' : ''),
-      department: item.department || 'Operations',
-      role: isAdmin ? 'System Administrator' : 'Team Member',
+      department: 'AR Callers',
+      role: isAdmin ? 'System Administrator' : 'AR Caller',
       roleType: isAdmin ? 'Admin' : 'Employee',
       passwordHash: hashPassword(rawPass),
       avatarColor: avatarColors[index % avatarColors.length]
@@ -134,6 +134,10 @@ function loadDB() {
       saveDB(initial);
       return initial;
     }
+    // Force all employees to AR Callers department
+    db.employees.forEach(e => {
+      e.department = 'AR Callers';
+    });
     return db;
   } catch (err) {
     const initial = getInitialData();
@@ -190,7 +194,7 @@ app.post('/api/auth/login', (req, res) => {
       id: user.id,
       name: user.name,
       phone: user.phone || '',
-      department: user.department,
+      department: 'AR Callers',
       roleType: user.roleType || 'Admin',
       avatarColor: user.avatarColor
     }
@@ -203,10 +207,10 @@ app.get('/api/employees', (req, res) => {
   res.json(db.employees);
 });
 
-// 3. Add New Employee
+// 3. Add New Employee (Always AR Callers)
 app.post('/api/employees', (req, res) => {
   const db = loadDB();
-  const { name, department, id } = req.body;
+  const { name, id } = req.body;
 
   if (!name || !name.trim()) {
     return res.status(400).json({ error: 'Employee name is required' });
@@ -222,8 +226,8 @@ app.post('/api/employees', (req, res) => {
   const newEmp = {
     id: newId,
     name: name.trim(),
-    department: (department && department.trim()) ? department.trim() : 'Operations',
-    role: 'Team Member',
+    department: 'AR Callers',
+    role: 'AR Caller',
     roleType: 'Employee',
     passwordHash: hashPassword(newId),
     avatarColor: avatarColors[Math.floor(Math.random() * avatarColors.length)]
@@ -255,31 +259,40 @@ app.delete('/api/employees/:id', (req, res) => {
   res.json({ success: true, deleted });
 });
 
-// 5. Get Attendance Records for a Specific Date
+// 5. Get Attendance Records for a Specific Date (Saturday & Sunday Default Off)
 app.get('/api/attendance', (req, res) => {
   const db = loadDB();
   const targetDate = req.query.date || new Date().toISOString().split('T')[0];
 
+  const dateObj = new Date(targetDate + 'T00:00:00');
+  const dayOfWeek = dateObj.getDay(); // 0 = Sunday, 6 = Saturday
+  const isWeekend = (dayOfWeek === 0 || dayOfWeek === 6);
+
   const records = db.employees.map(emp => {
     const att = (db.attendance || []).find(a => a.employeeId === emp.id && a.date === targetDate);
+    
+    // Default to 'Holiday / Off' for weekends if unmarked
+    let status = att ? att.status : (isWeekend ? 'Holiday / Off' : 'Unmarked');
+
     return {
       employeeId: emp.id,
       name: emp.name,
-      department: emp.department,
+      department: 'AR Callers',
       avatarColor: emp.avatarColor,
       date: targetDate,
-      status: att ? att.status : 'Unmarked',
-      notes: att ? (att.notes || '') : ''
+      status,
+      notes: att ? (att.notes || '') : (isWeekend ? 'Weekend Off' : '')
     };
   });
 
   res.json({
     date: targetDate,
+    isWeekend,
     records
   });
 });
 
-// 6. Mark Single Employee Attendance
+// 6. Mark Single Employee Attendance (Present, Absent, Half Day, Holiday / Off)
 app.post('/api/attendance/mark', (req, res) => {
   const db = loadDB();
   const { employeeId, date, status, notes } = req.body;
@@ -288,7 +301,7 @@ app.post('/api/attendance/mark', (req, res) => {
     return res.status(400).json({ error: 'Employee ID, Date, and Status are required' });
   }
 
-  const validStatuses = ['Present', 'Absent', 'Half Day', 'On Leave', 'Unmarked'];
+  const validStatuses = ['Present', 'Absent', 'Half Day', 'Holiday / Off', 'Unmarked'];
   if (!validStatuses.includes(status)) {
     return res.status(400).json({ error: 'Invalid status value' });
   }
@@ -307,7 +320,7 @@ app.post('/api/attendance/mark', (req, res) => {
       id: `ATT-${Date.now()}-${Math.floor(Math.random()*1000)}`,
       employeeId,
       employeeName: emp ? emp.name : '',
-      department: emp ? emp.department : '',
+      department: 'AR Callers',
       date,
       status,
       notes: notes || '',
@@ -347,7 +360,7 @@ app.post('/api/attendance/mark-all', (req, res) => {
         id: `ATT-${Date.now()}-${Math.floor(Math.random()*1000)}`,
         employeeId: emp.id,
         employeeName: emp.name,
-        department: emp.department,
+        department: 'AR Callers',
         date,
         status,
         updatedAt: new Date().toISOString()
@@ -386,7 +399,7 @@ app.post('/api/attendance/auto-present-remaining', (req, res) => {
           id: `ATT-${Date.now()}-${Math.floor(Math.random()*1000)}`,
           employeeId: emp.id,
           employeeName: emp.name,
-          department: emp.department,
+          department: 'AR Callers',
           date,
           status: 'Present',
           updatedAt: new Date().toISOString()
@@ -419,13 +432,13 @@ app.get('/api/export/monthly-excel', (req, res) => {
     let presentCount = 0;
     let absentCount = 0;
     let halfDayCount = 0;
-    let leaveCount = 0;
+    let holidayOffCount = 0;
 
     empRecords.forEach(r => {
       if (r.status === 'Present') presentCount++;
       else if (r.status === 'Absent') absentCount++;
       else if (r.status === 'Half Day') halfDayCount++;
-      else if (r.status === 'On Leave') leaveCount++;
+      else if (r.status === 'Holiday / Off' || r.status === 'On Leave') holidayOffCount++;
     });
 
     const totalDaysRecorded = empRecords.length;
@@ -433,11 +446,11 @@ app.get('/api/export/monthly-excel', (req, res) => {
     return {
       id: emp.id,
       name: emp.name,
-      department: emp.department,
+      department: 'AR Callers',
       present: presentCount,
       absent: absentCount,
       halfDay: halfDayCount,
-      leave: leaveCount,
+      holidayOff: holidayOffCount,
       totalRecorded: totalDaysRecorded
     };
   });
@@ -445,12 +458,11 @@ app.get('/api/export/monthly-excel', (req, res) => {
   let csv = '\uFEFF';
   csv += `PulseAttend Monthly Attendance Summary - Month: ${monthQuery}\n`;
   csv += `Generated On: ${new Date().toLocaleString('en-US')}\n\n`;
-  csv += `DBS ID,Employee Name,Department,Days Present,Days Absent,Half Days,Days On Leave,Total Days Recorded\n`;
+  csv += `DBS ID,Employee Name,Department,Days Present,Days Absent,Half Days,Holiday / Off Days,Total Days Recorded\n`;
 
   summary.forEach(row => {
     const cleanName = `"${row.name.replace(/"/g, '""')}"`;
-    const cleanDept = `"${row.department.replace(/"/g, '""')}"`;
-    csv += `${row.id},${cleanName},${cleanDept},${row.present},${row.absent},${row.halfDay},${row.leave},${row.totalRecorded}\n`;
+    csv += `${row.id},${cleanName},"AR Callers",${row.present},${row.absent},${row.halfDay},${row.holidayOff},${row.totalRecorded}\n`;
   });
 
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
@@ -461,6 +473,7 @@ app.get('/api/export/monthly-excel', (req, res) => {
 app.listen(PORT, () => {
   console.log(`====================================================`);
   console.log(`🚀 PulseAttend Clean Attendance Portal running on port ${PORT}`);
+  console.log(`🏢 Department: All Employees set to "AR Callers"`);
   console.log(`👤 Admin: Sagar Alapati (9704225352 / 9640000890)`);
   console.log(`====================================================`);
 });

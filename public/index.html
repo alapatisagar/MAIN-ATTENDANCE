@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PulseAttend - DBS Employee Attendance System</title>
+  <title>PulseAttend - AR Callers Attendance System</title>
   
   <!-- FontAwesome & Google Fonts -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
@@ -13,16 +13,16 @@
 <body>
 
   <!-- =========================================================
-       SCREEN 1: SIMPLE WELCOME LOGIN (ADMIN ONLY)
+       SCREEN 1: WELCOME LOGIN (ADMIN ONLY)
        ========================================================= -->
   <div id="welcomeScreen" class="welcome-container">
     <div class="welcome-card">
       <div class="welcome-header">
         <div class="welcome-logo">
-          <i class="fa-solid fa-clipboard-user text-yellow"></i>
+          <i class="fa-solid fa-headset text-yellow"></i>
         </div>
         <h2>PulseAttend</h2>
-        <p class="welcome-subtitle">DBS Employee Attendance Portal</p>
+        <p class="welcome-subtitle">AR Callers Attendance Portal</p>
       </div>
 
       <form id="welcomeLoginForm" onsubmit="handleAdminLogin(event)">
@@ -50,10 +50,10 @@
     <!-- Top Header -->
     <header class="app-header">
       <div class="header-brand">
-        <div class="brand-icon"><i class="fa-solid fa-clipboard-user"></i></div>
+        <div class="brand-icon"><i class="fa-solid fa-headset"></i></div>
         <div class="brand-title">
           <h1>PulseAttend</h1>
-          <span class="brand-badge">DBS Management</span>
+          <span class="brand-badge">AR Callers Department</span>
         </div>
       </div>
 
@@ -94,11 +94,11 @@
             <button type="button" class="btn-primary-excel" onclick="openModal('export-monthly-modal')">
               <i class="fa-solid fa-file-excel"></i> Export Monthly Excel
             </button>
-            <button type="button" class="btn-ghost-sm" onclick="handleAutoPresentRemaining()" title="Automatically mark all unmarked employees as Present for selected date">
-              <i class="fa-solid fa-wand-magic-sparkles text-yellow"></i> Auto-Mark Remaining Present
+            <button type="button" class="btn-ghost-sm" onclick="handleMarkAll('Holiday / Off')" title="Mark entire day as Holiday / Off">
+              <i class="fa-solid fa-umbrella-beach text-blue"></i> Mark Day as Off
             </button>
-            <button type="button" class="btn-ghost-sm" onclick="handleMarkAll('Present')">
-              <i class="fa-solid fa-check-double text-green"></i> Mark All Present
+            <button type="button" class="btn-ghost-sm" onclick="handleAutoPresentRemaining()" title="Automatically mark remaining unmarked employees as Present">
+              <i class="fa-solid fa-wand-magic-sparkles text-yellow"></i> Auto-Mark Remaining Present
             </button>
           </div>
         </div>
@@ -107,10 +107,10 @@
       <!-- Quick Summary Stats Bar -->
       <div class="stats-grid">
         <div class="stat-card">
-          <div class="stat-icon icon-blue"><i class="fa-solid fa-users"></i></div>
+          <div class="stat-icon icon-blue"><i class="fa-solid fa-headset"></i></div>
           <div class="stat-details">
             <span class="stat-value" id="statTotalEmp">0</span>
-            <span class="stat-label">Total Staff</span>
+            <span class="stat-label">Total AR Callers</span>
           </div>
         </div>
 
@@ -139,22 +139,33 @@
         </div>
 
         <div class="stat-card">
-          <div class="stat-icon icon-yellow"><i class="fa-solid fa-plane-departure"></i></div>
+          <div class="stat-icon icon-blue-light"><i class="fa-solid fa-umbrella-beach"></i></div>
           <div class="stat-details">
-            <span class="stat-value" id="statLeave">0</span>
-            <span class="stat-label">On Leave</span>
+            <span class="stat-value" id="statHolidayOff">0</span>
+            <span class="stat-label">Holiday / Off</span>
           </div>
         </div>
       </div>
 
       <!-- Main Employees Attendance Roster Table -->
       <div class="table-card">
-        <div class="table-header">
-          <h3>
-            <i class="fa-solid fa-list-check text-yellow"></i> 
-            Employee Roster & Attendance Status 
-            <span class="date-badge" id="currentDateBadge">Date</span>
-          </h3>
+        <div class="table-header-wrap">
+          <div class="table-title">
+            <h3>
+              <i class="fa-solid fa-list-check text-yellow"></i> 
+              AR Callers Roster 
+              <span class="date-badge" id="currentDateBadge">Date</span>
+            </h3>
+          </div>
+
+          <!-- Status Filter Tabs (Present, Absent, Half Day, Off, All) -->
+          <div class="filter-tabs">
+            <button class="filter-tab active" data-filter="All" onclick="setFilterTab('All')">All</button>
+            <button class="filter-tab tab-present" data-filter="Present" onclick="setFilterTab('Present')">🟢 Present</button>
+            <button class="filter-tab tab-absent" data-filter="Absent" onclick="setFilterTab('Absent')">🔴 Absent</button>
+            <button class="filter-tab tab-halfday" data-filter="Half Day" onclick="setFilterTab('Half Day')">🟣 Half Day</button>
+            <button class="filter-tab tab-off" data-filter="Holiday / Off" onclick="setFilterTab('Holiday / Off')">🔵 Off / Holiday</button>
+          </div>
         </div>
 
         <div class="table-responsive">
@@ -163,7 +174,7 @@
               <tr>
                 <th>Employee / DBS ID</th>
                 <th>Department</th>
-                <th class="text-center">Mark Attendance Status</th>
+                <th class="text-center">Attendance Status</th>
                 <th class="text-right">Action</th>
               </tr>
             </thead>
@@ -182,7 +193,7 @@
   <div class="modal-overlay" id="add-employee-modal">
     <div class="modal-card">
       <div class="modal-header">
-        <h3><i class="fa-solid fa-user-plus text-yellow"></i> Add New DBS Employee</h3>
+        <h3><i class="fa-solid fa-user-plus text-yellow"></i> Add New AR Caller</h3>
         <button class="modal-close" onclick="closeModal('add-employee-modal')">&times;</button>
       </div>
       <form id="addEmployeeForm" onsubmit="handleAddEmployee(event)">
@@ -198,16 +209,8 @@
           </div>
 
           <div class="form-group">
-            <label for="newEmpDept">Department</label>
-            <select id="newEmpDept" class="form-control">
-              <option value="Operations">Operations</option>
-              <option value="Engineering">Engineering</option>
-              <option value="HR">HR</option>
-              <option value="Sales">Sales</option>
-              <option value="Support">Support</option>
-              <option value="Design">Design</option>
-              <option value="Executive Management">Executive Management</option>
-            </select>
+            <label>Department</label>
+            <input type="text" class="form-control" value="AR Callers" readonly disabled style="opacity: 0.8;">
           </div>
         </div>
         <div class="modal-footer">
@@ -230,7 +233,7 @@
       <form id="exportMonthlyForm" onsubmit="handleExportMonthly(event)">
         <div class="modal-body">
           <p class="modal-description">
-            Select the month and year to generate a complete summary report listing all employees with total Present, Absent, Half Day, and Leave counts.
+            Select the month and year to generate a complete summary report for AR Callers listing total Present, Absent, Half Day, and Off days.
           </p>
 
           <div class="form-group">

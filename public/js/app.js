@@ -1,5 +1,5 @@
 /* ---------------------------------------------------------
-   PulseAttend - Clean & Simple Attendance Portal JS
+   PulseAttend - AR Callers Attendance Portal JS
    --------------------------------------------------------- */
 
 const API_BASE = '/api';
@@ -8,8 +8,10 @@ const state = {
   currentUser: null,
   token: null,
   selectedDate: new Date().toISOString().split('T')[0],
+  isWeekend: false,
   records: [],
-  searchQuery: ''
+  searchQuery: '',
+  activeTab: 'All'
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -17,7 +19,6 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function initApp() {
-  // Set default date inputs to today
   const today = new Date().toISOString().split('T')[0];
   const currentMonth = today.substring(0, 7);
 
@@ -27,7 +28,6 @@ function initApp() {
   const monthInput = document.getElementById('exportMonthInput');
   if (monthInput) monthInput.value = currentMonth;
 
-  // Check saved session
   const savedUser = localStorage.getItem('pulseattend_user');
   const savedToken = localStorage.getItem('pulseattend_token');
 
@@ -126,14 +126,30 @@ function handleSearchInput() {
   }
 }
 
+function setFilterTab(filterName) {
+  state.activeTab = filterName;
+  const tabs = document.querySelectorAll('.filter-tab');
+  tabs.forEach(tab => {
+    if (tab.dataset.filter === filterName) tab.classList.add('active');
+    else tab.classList.remove('active');
+  });
+  renderAttendanceTable();
+}
+
 async function fetchAttendanceForDate() {
   const date = state.selectedDate;
 
-  // Format date for header badge
   const dateObj = new Date(date + 'T00:00:00');
   const formattedDate = dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+  const dayOfWeek = dateObj.getDay();
+  const isWeekend = (dayOfWeek === 0 || dayOfWeek === 6);
+  state.isWeekend = isWeekend;
+
   const dateBadge = document.getElementById('currentDateBadge');
-  if (dateBadge) dateBadge.textContent = formattedDate;
+  if (dateBadge) {
+    dateBadge.textContent = isWeekend ? `${formattedDate} (Weekend Off)` : formattedDate;
+    dateBadge.className = isWeekend ? 'date-badge date-badge-weekend' : 'date-badge';
+  }
 
   try {
     const res = await fetch(`${API_BASE}/attendance?date=${date}`);
@@ -156,19 +172,28 @@ function renderAttendanceTable() {
   if (!tbody) return;
 
   const search = state.searchQuery;
-  const filtered = state.records.filter(r => 
-    !search || 
-    r.name.toLowerCase().includes(search) || 
-    r.employeeId.toLowerCase().includes(search) ||
-    r.department.toLowerCase().includes(search)
-  );
+  const activeTab = state.activeTab;
+
+  const filtered = state.records.filter(r => {
+    const matchSearch = !search || 
+      r.name.toLowerCase().includes(search) || 
+      r.employeeId.toLowerCase().includes(search);
+    
+    let matchTab = true;
+    if (activeTab === 'Present') matchTab = (r.status === 'Present');
+    else if (activeTab === 'Absent') matchTab = (r.status === 'Absent');
+    else if (activeTab === 'Half Day') matchTab = (r.status === 'Half Day');
+    else if (activeTab === 'Holiday / Off') matchTab = (r.status === 'Holiday / Off' || r.status === 'On Leave');
+
+    return matchSearch && matchTab;
+  });
 
   if (filtered.length === 0) {
     tbody.innerHTML = `
       <tr>
         <td colspan="4" class="text-center empty-state">
           <i class="fa-solid fa-folder-open text-muted"></i>
-          <p>No employees matching "${escapeHTML(search)}"</p>
+          <p>No employees found for filter "${escapeHTML(activeTab)}"${search ? ` matching "${escapeHTML(search)}"` : ''}</p>
         </td>
       </tr>
     `;
@@ -180,7 +205,7 @@ function renderAttendanceTable() {
     const isPresent = emp.status === 'Present';
     const isAbsent = emp.status === 'Absent';
     const isHalfDay = emp.status === 'Half Day';
-    const isLeave = emp.status === 'On Leave';
+    const isOff = (emp.status === 'Holiday / Off' || emp.status === 'On Leave');
 
     return `
       <tr>
@@ -194,7 +219,7 @@ function renderAttendanceTable() {
           </div>
         </td>
         <td>
-          <span class="dept-badge">${escapeHTML(emp.department || 'Operations')}</span>
+          <span class="dept-badge"><i class="fa-solid fa-headset text-yellow"></i> AR Callers</span>
         </td>
         <td>
           <div class="status-btn-group">
@@ -207,8 +232,8 @@ function renderAttendanceTable() {
             <button class="status-pill status-halfday ${isHalfDay ? 'active' : ''}" onclick="handleMarkAttendance('${emp.employeeId}', 'Half Day')">
               <i class="fa-solid fa-adjust"></i> Half Day
             </button>
-            <button class="status-pill status-leave ${isLeave ? 'active' : ''}" onclick="handleMarkAttendance('${emp.employeeId}', 'On Leave')">
-              <i class="fa-solid fa-plane-departure"></i> Leave
+            <button class="status-pill status-off ${isOff ? 'active' : ''}" onclick="handleMarkAttendance('${emp.employeeId}', 'Holiday / Off')">
+              <i class="fa-solid fa-umbrella-beach"></i> Off / Holiday
             </button>
           </div>
         </td>
@@ -229,20 +254,20 @@ function updateStatsSummary() {
   let present = 0;
   let absent = 0;
   let halfDay = 0;
-  let leave = 0;
+  let holidayOff = 0;
 
   state.records.forEach(r => {
     if (r.status === 'Present') present++;
     else if (r.status === 'Absent') absent++;
     else if (r.status === 'Half Day') halfDay++;
-    else if (r.status === 'On Leave') leave++;
+    else if (r.status === 'Holiday / Off' || r.status === 'On Leave') holidayOff++;
   });
 
   document.getElementById('statTotalEmp').textContent = total;
   document.getElementById('statPresent').textContent = present;
   document.getElementById('statAbsent').textContent = absent;
   document.getElementById('statHalfDay').textContent = halfDay;
-  document.getElementById('statLeave').textContent = leave;
+  document.getElementById('statHolidayOff').textContent = holidayOff;
 }
 
 async function handleMarkAttendance(employeeId, status) {
@@ -271,10 +296,10 @@ async function handleMarkAttendance(employeeId, status) {
 
     showToast(`Marked ${status} for ${rec ? rec.name : employeeId}`, 'success');
 
-    // Automatically auto-mark all remaining unmarked employees as Present if marking Absent/HalfDay/Leave
-    if (status === 'Absent' || status === 'Half Day' || status === 'On Leave') {
+    // Auto-mark remaining unmarked as Present if marking Absent/HalfDay/Off
+    if (status === 'Absent' || status === 'Half Day' || status === 'Holiday / Off') {
       const hasUnmarked = state.records.some(r => r.status === 'Unmarked');
-      if (hasUnmarked) {
+      if (hasUnmarked && !state.isWeekend) {
         autoMarkUnmarkedPresent(date);
       }
     }
@@ -284,7 +309,6 @@ async function handleMarkAttendance(employeeId, status) {
   }
 }
 
-// Helper to auto-mark all remaining unmarked employees as Present
 async function autoMarkUnmarkedPresent(date) {
   try {
     const res = await fetch(`${API_BASE}/attendance/auto-present-remaining`, {
@@ -353,13 +377,12 @@ async function handleAddEmployee(e) {
 
   const name = document.getElementById('newEmpName').value;
   const id = document.getElementById('newEmpId').value;
-  const department = document.getElementById('newEmpDept').value;
 
   try {
     const res = await fetch(`${API_BASE}/employees`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, id, department })
+      body: JSON.stringify({ name, id, department: 'AR Callers' })
     });
 
     const data = await res.json();
@@ -368,7 +391,7 @@ async function handleAddEmployee(e) {
       return;
     }
 
-    showToast(`Added ${data.name} (${data.id}) to Roster!`, 'success');
+    showToast(`Added ${data.name} (${data.id}) as AR Caller!`, 'success');
     closeModal('add-employee-modal');
     document.getElementById('addEmployeeForm').reset();
     fetchAttendanceForDate();
@@ -413,7 +436,6 @@ function handleExportMonthly(e) {
   showToast(`Downloading Monthly Excel Report for ${monthVal}...`, 'success');
   closeModal('export-monthly-modal');
 
-  // Trigger CSV download directly in browser
   window.location.href = `${API_BASE}/export/monthly-excel?month=${monthVal}`;
 }
 
@@ -431,7 +453,7 @@ function closeModal(modalId) {
 }
 
 function getInitials(name) {
-  if (!name) return 'DB';
+  if (!name) return 'AR';
   const parts = name.trim().split(' ');
   if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
