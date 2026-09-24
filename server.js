@@ -28,10 +28,8 @@ if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
-// In-Memory Security Stores
+// Active Sessions Store
 const activeSessions = new Map();
-const pending2FAChallenges = new Map();
-const loginAttempts = new Map();
 
 // Password Hashing Helper
 function hashPassword(password) {
@@ -99,7 +97,6 @@ const RAW_STAFF_LIST = [
 ];
 
 function getInitialData() {
-  const todayStr = new Date().toISOString().split('T')[0];
   const avatarColors = ['#EF4444', '#F59E0B', '#DC2626', '#D97706', '#B91C1C', '#EAB308'];
 
   const employees = RAW_STAFF_LIST.map((item, index) => {
@@ -111,46 +108,16 @@ function getInitialData() {
       phone: item.phone || (isAdmin ? '9704225352' : ''),
       department: item.department || 'Operations',
       role: isAdmin ? 'System Administrator' : 'Team Member',
-      roleType: isAdmin ? 'Admin' : (item.roleType || 'Employee'),
-      email: `${item.name.toLowerCase().replace(/[^a-z0-9]/g, '.')}@dbs.com`,
-      shift: '09:00 - 17:00',
-      status: 'Active',
+      roleType: isAdmin ? 'Admin' : 'Employee',
       passwordHash: hashPassword(rawPass),
       avatarColor: avatarColors[index % avatarColors.length]
     };
   });
 
-  const attendance = [
-    {
-      id: 'ATT-2001',
-      employeeId: 'DBS-540',
-      employeeName: 'Sagar Alapati',
-      department: 'Executive Management',
-      date: todayStr,
-      clockIn: `${todayStr}T08:50:00`,
-      clockOut: null,
-      status: 'Present',
-      location: 'HQ Office',
-      notes: 'System Admin present (SMS 2FA Authenticated)'
-    }
-  ];
-
-  const leaves = [
-    {
-      id: 'LV-701',
-      employeeId: 'DBS-2649',
-      employeeName: 'Durga Sri Venkateswarlu Vemula',
-      department: 'Engineering',
-      type: 'Casual Leave',
-      startDate: todayStr,
-      endDate: todayStr,
-      days: 1,
-      reason: 'Personal family work',
-      status: 'Approved'
-    }
-  ];
-
-  return { employees, attendance, leaves };
+  return {
+    employees,
+    attendance: []
+  };
 }
 
 function loadDB() {
@@ -160,15 +127,13 @@ function loadDB() {
     return initial;
   }
   try {
-    const raw = fs.readFileSync(DB_FILE, 'utf8');
-    const db = JSON.parse(raw);
-    const sagar = db.employees.find(e => e.id === 'DBS-540' || e.name.toLowerCase().includes('sagar alapati'));
-    if (sagar) {
-      sagar.roleType = 'Admin';
-      sagar.phone = '9704225352';
-      sagar.passwordHash = hashPassword('9640000890');
+    const content = fs.readFileSync(DB_FILE, 'utf8');
+    const db = JSON.parse(content);
+    if (!db.employees || !Array.isArray(db.employees)) {
+      const initial = getInitialData();
+      saveDB(initial);
+      return initial;
     }
-    saveDB(db);
     return db;
   } catch (err) {
     const initial = getInitialData();
@@ -182,105 +147,16 @@ function saveDB(data) {
 }
 
 // ---------------------------------------------------------
-// REAL SMS GATEWAY DISPATCH HELPER (Fast2SMS / 2Factor / Twilio / Webhook)
-// ---------------------------------------------------------
-async function dispatchSMS(phone, otpCode) {
-  const cleanPhone = (phone || '9704225352').replace(/\D/g, '');
-  const message = `PulseAttend Admin 2FA Code: ${otpCode}. Valid for 10 minutes.`;
-
-  console.log(`====================================================`);
-  console.log(`📲 SMS DISPATCH TO +91 ${cleanPhone}`);
-  console.log(`🔑 NEW UNIQUE 6-DIGIT OTP CODE: [ ${otpCode} ]`);
-  console.log(`====================================================`);
-
-  // 1. Fast2SMS Integration (India)
-  if (process.env.FAST2SMS_API_KEY) {
-    try {
-      const url = `https://www.fast2sms.com/dev/bulkV2?authorization=${process.env.FAST2SMS_API_KEY}&route=otp&variables_values=${otpCode}&numbers=${cleanPhone}`;
-      const res = await fetch(url);
-      const data = await res.json();
-      console.log(`📲 Fast2SMS Dispatch Status:`, data);
-      return { sent: true, provider: 'Fast2SMS' };
-    } catch (err) {
-      console.error(`❌ Fast2SMS Dispatch Failed:`, err.message);
-    }
-  }
-
-  // 2. 2Factor.in Integration (India)
-  if (process.env.TWOFACTOR_API_KEY) {
-    try {
-      const url = `https://2factor.in/API/V1/${process.env.TWOFACTOR_API_KEY}/SMS/${cleanPhone}/${otpCode}`;
-      const res = await fetch(url);
-      const data = await res.json();
-      console.log(`📲 2Factor Dispatch Status:`, data);
-      return { sent: true, provider: '2Factor' };
-    } catch (err) {
-      console.error(`❌ 2Factor Dispatch Failed:`, err.message);
-    }
-  }
-
-  // 3. Twilio SMS Integration
-  if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_PHONE_NUMBER) {
-    try {
-      const auth = Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString('base64');
-      const params = new URLSearchParams({
-        To: `+91${cleanPhone}`,
-        From: process.env.TWILIO_PHONE_NUMBER,
-        Body: message
-      });
-      const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_ACCOUNT_SID}/Messages.json`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Basic ${auth}`,
-          'Content-Type': 'application/x-www-form-urlencoded'
-        },
-        body: params.toString()
-      });
-      const data = await res.json();
-      console.log(`📲 Twilio Dispatch Status:`, data);
-      return { sent: true, provider: 'Twilio' };
-    } catch (err) {
-      console.error(`❌ Twilio Dispatch Failed:`, err.message);
-    }
-  }
-
-  // 4. Custom SMS Webhook Gateway
-  if (process.env.SMS_WEBHOOK_URL) {
-    try {
-      const res = await fetch(process.env.SMS_WEBHOOK_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: cleanPhone, otp: otpCode, message })
-      });
-      console.log(`📲 SMS Webhook Status:`, res.status);
-      return { sent: true, provider: 'Webhook' };
-    } catch (err) {
-      console.error(`❌ SMS Webhook Failed:`, err.message);
-    }
-  }
-
-  return { sent: false, note: 'SMS logged in server console. Add SMS_API_KEY env var for live cellular transmission.' };
-}
-
-// ---------------------------------------------------------
-// REST API ENDPOINTS WITH HIGH SECURITY & SMS 2FA
+// REST API ENDPOINTS
 // ---------------------------------------------------------
 
-// STEP 1: Strict Login Endpoint (Generates Unique 6-Digit SMS Code Per Login)
+// 1. Direct Admin Login (NO 2FA)
 app.post('/api/auth/login', (req, res) => {
   const db = loadDB();
   const { usernameOrId, password } = req.body;
-  const clientIp = req.ip || req.headers['x-forwarded-for'] || '127.0.0.1';
-
-  const attemptKey = `${clientIp}_${usernameOrId}`;
-  const attempt = loginAttempts.get(attemptKey) || { count: 0, lockUntil: 0 };
-  if (attempt.lockUntil > Date.now()) {
-    const waitSec = Math.ceil((attempt.lockUntil - Date.now()) / 1000);
-    return res.status(429).json({ error: `Too many failed login attempts. Locked for ${waitSec} seconds.` });
-  }
 
   if (!usernameOrId || !password) {
-    return res.status(400).json({ error: 'Username / Phone / Employee ID and Password are required' });
+    return res.status(400).json({ error: 'Username/Phone and Password are required' });
   }
 
   const query = usernameOrId.trim().toLowerCase();
@@ -292,102 +168,19 @@ app.post('/api/auth/login', (req, res) => {
   );
 
   if (!user) {
-    attempt.count += 1;
-    if (attempt.count >= 5) attempt.lockUntil = Date.now() + 15 * 60 * 1000;
-    loginAttempts.set(attemptKey, attempt);
-    return res.status(401).json({ error: 'Invalid Employee Phone / ID or Password' });
+    return res.status(401).json({ error: 'Invalid Credentials. Please check your username/phone.' });
   }
 
   const inputHash = hashPassword(password.trim());
   if (user.passwordHash !== inputHash) {
-    attempt.count += 1;
-    if (attempt.count >= 5) attempt.lockUntil = Date.now() + 15 * 60 * 1000;
-    loginAttempts.set(attemptKey, attempt);
-    return res.status(401).json({ error: 'Incorrect Password. Please check your credentials.' });
+    return res.status(401).json({ error: 'Incorrect Password. Please check your password.' });
   }
-
-  loginAttempts.delete(attemptKey);
-
-  // CHECK IF ADMIN REQUIRES 2FA OTP
-  if (user.roleType === 'Admin') {
-    const challengeId = crypto.randomBytes(16).toString('hex');
-    // Generates a UNIQUE, NEW 6-digit random code EVERY SINGLE LOGIN!
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-
-    pending2FAChallenges.set(challengeId, {
-      userId: user.id,
-      otp,
-      expiresAt: Date.now() + 10 * 60 * 1000
-    });
-
-    // Dispatch SMS asynchronously via provider API
-    dispatchSMS(user.phone || '9704225352', otp);
-
-    return res.json({
-      success: true,
-      requires2FA: true,
-      challengeId,
-      phone: user.phone || '9704225352',
-      message: `Fresh 6-Digit SMS Security Code sent to Admin mobile +91 ${user.phone || '9704225352'}`
-    });
-  }
-
-  // Normal Employee Login
-  const token = crypto.randomBytes(32).toString('hex');
-  activeSessions.set(token, {
-    userId: user.id,
-    roleType: user.roleType || 'Employee',
-    expiresAt: Date.now() + 24 * 60 * 60 * 1000
-  });
-
-  res.json({
-    success: true,
-    requires2FA: false,
-    token,
-    user: {
-      id: user.id,
-      name: user.name,
-      phone: user.phone || '',
-      department: user.department,
-      role: user.role,
-      roleType: user.roleType || 'Employee',
-      avatarColor: user.avatarColor
-    }
-  });
-});
-
-// STEP 2: Verify 2FA OTP Endpoint (Validates SMS Code)
-app.post('/api/auth/verify-2fa', (req, res) => {
-  const db = loadDB();
-  const { challengeId, otp } = req.body;
-
-  if (!challengeId || !otp) {
-    return res.status(400).json({ error: 'Challenge ID and 6-digit OTP are required' });
-  }
-
-  const challenge = pending2FAChallenges.get(challengeId);
-  if (!challenge || challenge.expiresAt < Date.now()) {
-    pending2FAChallenges.delete(challengeId);
-    return res.status(400).json({ error: 'SMS OTP has expired. Please login again.' });
-  }
-
-  const submitted = otp.trim();
-  const isValidOtp = (submitted === challenge.otp || submitted === '123456');
-
-  if (!isValidOtp) {
-    return res.status(401).json({ error: 'Incorrect 6-digit SMS OTP Code. Please check your mobile messages.' });
-  }
-
-  const user = db.employees.find(e => e.id === challenge.userId);
-  if (!user) return res.status(404).json({ error: 'User not found' });
-
-  pending2FAChallenges.delete(challengeId);
 
   const token = crypto.randomBytes(32).toString('hex');
   activeSessions.set(token, {
     userId: user.id,
     roleType: user.roleType || 'Admin',
-    expiresAt: Date.now() + 24 * 60 * 60 * 1000
+    expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000 // 30 days
   });
 
   res.json({
@@ -398,370 +191,234 @@ app.post('/api/auth/verify-2fa', (req, res) => {
       name: user.name,
       phone: user.phone || '',
       department: user.department,
-      role: user.role,
       roleType: user.roleType || 'Admin',
       avatarColor: user.avatarColor
     }
   });
 });
 
-app.put('/api/employees/:id/password', (req, res) => {
-  const db = loadDB();
-  const { id } = req.params;
-  const { newPassword } = req.body;
-
-  if (!newPassword || newPassword.trim().length < 4) {
-    return res.status(400).json({ error: 'Password must be at least 4 characters long' });
-  }
-
-  const user = db.employees.find(e => e.id === id);
-  if (!user) return res.status(404).json({ error: 'Employee not found' });
-
-  user.passwordHash = hashPassword(newPassword.trim());
-  saveDB(db);
-
-  res.json({ success: true, message: `Password for ${user.name} updated securely` });
-});
-
+// 2. Get All Employees List
 app.get('/api/employees', (req, res) => {
   const db = loadDB();
-  const safeEmployees = db.employees.map(({ passwordHash, ...emp }) => emp);
-  res.json(safeEmployees);
+  res.json(db.employees);
 });
 
+// 3. Add New Employee
 app.post('/api/employees', (req, res) => {
   const db = loadDB();
-  const { name, department, role, roleType, email, shift, password, phone } = req.body;
-  
-  if (!name || !department) {
-    return res.status(400).json({ error: 'Name and Department are required' });
+  const { name, department, id } = req.body;
+
+  if (!name || !name.trim()) {
+    return res.status(400).json({ error: 'Employee name is required' });
   }
 
-  const newId = `DBS-${Math.floor(2000 + Math.random() * 8000)}`;
-  const colors = ['#EF4444', '#F59E0B', '#DC2626', '#D97706', '#B91C1C'];
+  const newId = (id && id.trim()) ? id.trim().toUpperCase() : `DBS-${Math.floor(1000 + Math.random() * 9000)}`;
 
+  if (db.employees.some(e => e.id.toLowerCase() === newId.toLowerCase())) {
+    return res.status(400).json({ error: `Employee ID ${newId} already exists` });
+  }
+
+  const avatarColors = ['#EF4444', '#F59E0B', '#DC2626', '#D97706', '#B91C1C', '#EAB308'];
   const newEmp = {
     id: newId,
-    name,
-    phone: phone || '',
-    department,
-    role: role || 'Team Member',
-    roleType: roleType || 'Employee',
-    email: email || `${name.toLowerCase().replace(/\s+/g, '.')}@dbs.com`,
-    shift: shift || '09:00 - 17:00',
-    status: 'Active',
-    passwordHash: hashPassword(password || newId),
-    avatarColor: colors[Math.floor(Math.random() * colors.length)]
+    name: name.trim(),
+    department: (department && department.trim()) ? department.trim() : 'Operations',
+    role: 'Team Member',
+    roleType: 'Employee',
+    passwordHash: hashPassword(newId),
+    avatarColor: avatarColors[Math.floor(Math.random() * avatarColors.length)]
   };
 
   db.employees.push(newEmp);
   saveDB(db);
 
-  const { passwordHash: _, ...safeEmp } = newEmp;
-  res.status(201).json(safeEmp);
+  res.status(201).json(newEmp);
 });
 
-app.put('/api/employees/:id/role', (req, res) => {
-  const db = loadDB();
-  const emp = db.employees.find(e => e.id === req.params.id);
-  if (!emp) return res.status(404).json({ error: 'Employee not found' });
-
-  const { roleType } = req.body;
-  if (!['Admin', 'Manager', 'Team Lead', 'Employee'].includes(roleType)) {
-    return res.status(400).json({ error: 'Invalid Role Type' });
-  }
-
-  emp.roleType = roleType;
-  saveDB(db);
-
-  res.json({ success: true, message: `Role updated to ${roleType}`, employee: emp });
-});
-
-app.post('/api/attendance/mark', (req, res) => {
-  const db = loadDB();
-  const { employeeId, status, date, notes } = req.body;
-
-  if (!employeeId || !status) {
-    return res.status(400).json({ error: 'Employee ID and Status are required' });
-  }
-
-  const validStatuses = ['Present', 'Absent', 'Half Day', 'Late', 'On Leave', 'Clocked Out'];
-  if (!validStatuses.includes(status)) {
-    return res.status(400).json({ error: 'Invalid Status' });
-  }
-
-  const emp = db.employees.find(e => e.id === employeeId);
-  if (!emp) return res.status(404).json({ error: 'Employee not found' });
-
-  const targetDate = date || new Date().toISOString().split('T')[0];
-  const now = new Date().toISOString();
-
-  let log = db.attendance.find(a => a.employeeId === employeeId && a.date === targetDate);
-
-  if (log) {
-    log.status = status;
-    log.notes = notes || `Marked as ${status} by Admin`;
-  } else {
-    log = {
-      id: `ATT-${Math.floor(2000 + Math.random() * 8000)}`,
-      employeeId: emp.id,
-      employeeName: emp.name,
-      department: emp.department,
-      date: targetDate,
-      clockIn: status === 'Absent' ? null : now,
-      clockOut: status === 'Clocked Out' ? now : null,
-      status,
-      location: 'HQ Office',
-      notes: notes || `Marked as ${status} by Admin`
-    };
-    db.attendance.push(log);
-  }
-
-  saveDB(db);
-  res.json({ success: true, message: `Marked ${emp.name} as ${status}`, log });
-});
-
+// 4. Delete Employee
 app.delete('/api/employees/:id', (req, res) => {
   const db = loadDB();
-  db.employees = db.employees.filter(e => e.id !== req.params.id);
-  saveDB(db);
-  res.json({ success: true, message: 'Employee removed' });
-});
+  const { id } = req.params;
 
-app.get('/api/attendance', (req, res) => {
-  const db = loadDB();
-  let logs = [...db.attendance];
-
-  const { date, employeeId, department, status, search } = req.query;
-
-  if (date) logs = logs.filter(l => l.date === date);
-  if (employeeId) logs = logs.filter(l => l.employeeId === employeeId);
-  if (department) logs = logs.filter(l => l.department.toLowerCase() === department.toLowerCase());
-  if (status) logs = logs.filter(l => l.status.toLowerCase() === status.toLowerCase());
-  if (search) {
-    const q = search.toLowerCase();
-    logs = logs.filter(l => 
-      l.employeeName.toLowerCase().includes(q) || 
-      l.employeeId.toLowerCase().includes(q)
-    );
+  if (id === 'DBS-540') {
+    return res.status(400).json({ error: 'Cannot delete primary Admin Sagar Alapati' });
   }
 
-  logs.sort((a, b) => new Date(b.clockIn || b.date) - new Date(a.clockIn || a.date));
-  res.json(logs);
+  const index = db.employees.findIndex(e => e.id === id);
+  if (index === -1) {
+    return res.status(404).json({ error: 'Employee not found' });
+  }
+
+  const deleted = db.employees.splice(index, 1)[0];
+  saveDB(db);
+
+  res.json({ success: true, deleted });
 });
 
-app.get('/api/attendance/today-summary', (req, res) => {
+// 5. Get Attendance Records for a Specific Date
+app.get('/api/attendance', (req, res) => {
   const db = loadDB();
-  const todayStr = new Date().toISOString().split('T')[0];
+  const targetDate = req.query.date || new Date().toISOString().split('T')[0];
 
-  const todayLogs = db.attendance.filter(a => a.date === todayStr);
-  const activeLeaves = db.leaves.filter(l => l.status === 'Approved' && l.startDate <= todayStr && l.endDate >= todayStr);
+  const records = db.employees.map(emp => {
+    const att = (db.attendance || []).find(a => a.employeeId === emp.id && a.date === targetDate);
+    return {
+      employeeId: emp.id,
+      name: emp.name,
+      department: emp.department,
+      avatarColor: emp.avatarColor,
+      date: targetDate,
+      status: att ? att.status : 'Unmarked',
+      notes: att ? (att.notes || '') : ''
+    };
+  });
 
-  const rosterStatus = db.employees.map(emp => {
-    const log = todayLogs.find(a => a.employeeId === emp.id);
-    const leave = activeLeaves.find(l => l.employeeId === emp.id);
+  res.json({
+    date: targetDate,
+    records
+  });
+});
 
-    let currentStatus = 'Absent';
-    let timeInfo = '';
+// 6. Mark Single Employee Attendance
+app.post('/api/attendance/mark', (req, res) => {
+  const db = loadDB();
+  const { employeeId, date, status, notes } = req.body;
 
-    if (leave) {
-      currentStatus = 'On Leave';
-      timeInfo = leave.type;
-    } else if (log) {
-      currentStatus = log.status;
-      timeInfo = log.clockIn ? new Date(log.clockIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+  if (!employeeId || !date || !status) {
+    return res.status(400).json({ error: 'Employee ID, Date, and Status are required' });
+  }
+
+  const validStatuses = ['Present', 'Absent', 'Half Day', 'On Leave', 'Unmarked'];
+  if (!validStatuses.includes(status)) {
+    return res.status(400).json({ error: 'Invalid status value' });
+  }
+
+  if (!db.attendance) db.attendance = [];
+
+  const index = db.attendance.findIndex(a => a.employeeId === employeeId && a.date === date);
+  const emp = db.employees.find(e => e.id === employeeId);
+
+  if (index >= 0) {
+    db.attendance[index].status = status;
+    db.attendance[index].notes = notes || db.attendance[index].notes || '';
+    db.attendance[index].updatedAt = new Date().toISOString();
+  } else {
+    db.attendance.push({
+      id: `ATT-${Date.now()}-${Math.floor(Math.random()*1000)}`,
+      employeeId,
+      employeeName: emp ? emp.name : '',
+      department: emp ? emp.department : '',
+      date,
+      status,
+      notes: notes || '',
+      updatedAt: new Date().toISOString()
+    });
+  }
+
+  saveDB(db);
+
+  res.json({
+    success: true,
+    message: `Attendance marked as ${status} for ${emp ? emp.name : employeeId}`,
+    employeeId,
+    date,
+    status
+  });
+});
+
+// 7. Bulk Mark All Employees for a Date
+app.post('/api/attendance/mark-all', (req, res) => {
+  const db = loadDB();
+  const { date, status } = req.body;
+
+  if (!date || !status) {
+    return res.status(400).json({ error: 'Date and Status are required' });
+  }
+
+  if (!db.attendance) db.attendance = [];
+
+  db.employees.forEach(emp => {
+    const index = db.attendance.findIndex(a => a.employeeId === emp.id && a.date === date);
+    if (index >= 0) {
+      db.attendance[index].status = status;
+      db.attendance[index].updatedAt = new Date().toISOString();
+    } else {
+      db.attendance.push({
+        id: `ATT-${Date.now()}-${Math.floor(Math.random()*1000)}`,
+        employeeId: emp.id,
+        employeeName: emp.name,
+        department: emp.department,
+        date,
+        status,
+        updatedAt: new Date().toISOString()
+      });
     }
+  });
+
+  saveDB(db);
+
+  res.json({
+    success: true,
+    message: `All employees marked as ${status} for date ${date}`
+  });
+});
+
+// 8. Export Monthly Attendance Excel / CSV Report
+app.get('/api/export/monthly-excel', (req, res) => {
+  const db = loadDB();
+  const monthQuery = req.query.month || new Date().toISOString().substring(0, 7);
+
+  const attendanceList = db.attendance || [];
+  const monthRecords = attendanceList.filter(a => a.date && a.date.startsWith(monthQuery));
+
+  const summary = db.employees.map(emp => {
+    const empRecords = monthRecords.filter(a => a.employeeId === emp.id);
+
+    let presentCount = 0;
+    let absentCount = 0;
+    let halfDayCount = 0;
+    let leaveCount = 0;
+
+    empRecords.forEach(r => {
+      if (r.status === 'Present') presentCount++;
+      else if (r.status === 'Absent') absentCount++;
+      else if (r.status === 'Half Day') halfDayCount++;
+      else if (r.status === 'On Leave') leaveCount++;
+    });
+
+    const totalDaysRecorded = empRecords.length;
 
     return {
       id: emp.id,
       name: emp.name,
       department: emp.department,
-      role: emp.role,
-      status: currentStatus,
-      timeInfo,
-      avatarColor: emp.avatarColor
+      present: presentCount,
+      absent: absentCount,
+      halfDay: halfDayCount,
+      leave: leaveCount,
+      totalRecorded: totalDaysRecorded
     };
   });
 
-  res.json(rosterStatus);
-});
+  let csv = '\uFEFF';
+  csv += `PulseAttend Monthly Attendance Summary - Month: ${monthQuery}\n`;
+  csv += `Generated On: ${new Date().toLocaleString('en-US')}\n\n`;
+  csv += `DBS ID,Employee Name,Department,Days Present,Days Absent,Half Days,Days On Leave,Total Days Recorded\n`;
 
-app.post('/api/attendance/clock-in', (req, res) => {
-  const db = loadDB();
-  const { employeeId, location, notes } = req.body;
-
-  if (!employeeId) return res.status(400).json({ error: 'Employee ID is required' });
-
-  const emp = db.employees.find(e => e.id === employeeId);
-  if (!emp) return res.status(404).json({ error: 'Employee not found' });
-
-  const now = new Date();
-  const todayStr = now.toISOString().split('T')[0];
-
-  const existing = db.attendance.find(a => a.employeeId === employeeId && a.date === todayStr);
-  if (existing && !existing.clockOut) {
-    return res.status(400).json({ error: 'You are already clocked in for today' });
-  }
-
-  const hour = now.getHours();
-  const minute = now.getMinutes();
-  const isLate = (hour > 9) || (hour === 9 && minute > 15);
-  const status = isLate ? 'Late' : 'Present';
-
-  const newLog = {
-    id: `ATT-${Math.floor(2000 + Math.random() * 8000)}`,
-    employeeId: emp.id,
-    employeeName: emp.name,
-    department: emp.department,
-    date: todayStr,
-    clockIn: now.toISOString(),
-    clockOut: null,
-    status,
-    location: location || 'HQ Office',
-    notes: notes || (isLate ? 'Late check-in' : 'On-time check-in')
-  };
-
-  db.attendance.push(newLog);
-  saveDB(db);
-  res.status(201).json(newLog);
-});
-
-app.post('/api/attendance/clock-out', (req, res) => {
-  const db = loadDB();
-  const { employeeId } = req.body;
-
-  if (!employeeId) return res.status(400).json({ error: 'Employee ID is required' });
-
-  const todayStr = new Date().toISOString().split('T')[0];
-  const activeLog = db.attendance.find(a => a.employeeId === employeeId && a.date === todayStr && !a.clockOut);
-
-  if (!activeLog) {
-    return res.status(400).json({ error: 'No active clock-in session found today' });
-  }
-
-  const now = new Date();
-  activeLog.clockOut = now.toISOString();
-  activeLog.status = 'Clocked Out';
-
-  const durationMs = now - new Date(activeLog.clockIn);
-  activeLog.workHours = parseFloat((durationMs / (1000 * 60 * 60)).toFixed(2));
-
-  saveDB(db);
-  res.json(activeLog);
-});
-
-app.get('/api/stats/today', (req, res) => {
-  const db = loadDB();
-  const todayStr = new Date().toISOString().split('T')[0];
-
-  const totalEmployees = db.employees.length;
-  const todayLogs = db.attendance.filter(a => a.date === todayStr);
-
-  const presentCount = todayLogs.filter(a => a.status === 'Present' || a.status === 'Clocked Out').length;
-  const lateCount = todayLogs.filter(a => a.status === 'Late').length;
-  const halfDayCount = todayLogs.filter(a => a.status === 'Half Day').length;
-  const onLeaveCount = db.leaves.filter(l => l.status === 'Approved' && l.startDate <= todayStr && l.endDate >= todayStr).length;
-
-  const totalAttended = presentCount + lateCount + halfDayCount;
-  const absentCount = Math.max(0, totalEmployees - totalAttended - onLeaveCount);
-  const attendanceRate = totalEmployees > 0 ? Math.round((totalAttended / totalEmployees) * 100) : 0;
-
-  res.json({
-    date: todayStr,
-    totalEmployees,
-    present: presentCount,
-    late: lateCount,
-    halfDay: halfDayCount,
-    onLeave: onLeaveCount,
-    absent: absentCount,
-    attendanceRate
-  });
-});
-
-app.get('/api/leaves', (req, res) => {
-  const db = loadDB();
-  res.json(db.leaves);
-});
-
-app.post('/api/leaves', (req, res) => {
-  const db = loadDB();
-  const { employeeId, type, startDate, endDate, reason } = req.body;
-
-  if (!employeeId || !type || !startDate || !endDate) {
-    return res.status(400).json({ error: 'Employee ID, Leave Type, and Dates are required' });
-  }
-
-  const emp = db.employees.find(e => e.id === employeeId);
-  if (!emp) return res.status(404).json({ error: 'Employee not found' });
-
-  const start = new Date(startDate);
-  const end = new Date(endDate);
-  const diffDays = Math.ceil(Math.abs(end - start) / (1000 * 60 * 60 * 24)) + 1;
-
-  const newLeave = {
-    id: `LV-${Math.floor(700 + Math.random() * 300)}`,
-    employeeId: emp.id,
-    employeeName: emp.name,
-    department: emp.department,
-    type,
-    startDate,
-    endDate,
-    days: diffDays,
-    reason: reason || 'N/A',
-    status: 'Pending'
-  };
-
-  db.leaves.push(newLeave);
-  saveDB(db);
-  res.status(201).json(newLeave);
-});
-
-app.put('/api/leaves/:id', (req, res) => {
-  const db = loadDB();
-  const leave = db.leaves.find(l => l.id === req.params.id);
-  if (!leave) return res.status(404).json({ error: 'Leave request not found' });
-
-  const { status } = req.body;
-  if (!['Approved', 'Rejected', 'Pending'].includes(status)) {
-    return res.status(400).json({ error: 'Invalid status' });
-  }
-
-  leave.status = status;
-  saveDB(db);
-  res.json(leave);
-});
-
-app.get('/api/export/csv', (req, res) => {
-  const db = loadDB();
-  let csv = 'ID,DBS ID,Employee Name,Department,Date,Clock In,Clock Out,Status,Location,Notes\n';
-
-  db.attendance.forEach(l => {
-    const clockInStr = l.clockIn ? new Date(l.clockIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
-    const clockOutStr = l.clockOut ? new Date(l.clockOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A';
-    const esc = (val) => `"${String(val || '').replace(/"/g, '""')}"`;
-
-    csv += [
-      esc(l.id),
-      esc(l.employeeId),
-      esc(l.employeeName),
-      esc(l.department),
-      esc(l.date),
-      esc(clockInStr),
-      esc(clockOutStr),
-      esc(l.status),
-      esc(l.location),
-      esc(l.notes)
-    ].join(',') + '\n';
+  summary.forEach(row => {
+    const cleanName = `"${row.name.replace(/"/g, '""')}"`;
+    const cleanDept = `"${row.department.replace(/"/g, '""')}"`;
+    csv += `${row.id},${cleanName},${cleanDept},${row.present},${row.absent},${row.halfDay},${row.leave},${row.totalRecorded}\n`;
   });
 
-  res.setHeader('Content-Type', 'text/csv');
-  res.setHeader('Content-Disposition', `attachment; filename=dbs_attendance_report_${new Date().toISOString().split('T')[0]}.csv`);
-  res.status(200).send(csv);
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename=PulseAttend_Monthly_Attendance_${monthQuery}.csv`);
+  res.send(csv);
 });
 
 app.listen(PORT, () => {
   console.log(`====================================================`);
-  console.log(`🚀 PulseAttend Production Portal running on port ${PORT}`);
-  console.log(`🛡️ Master 2FA Code Available: [ 123456 ]`);
+  console.log(`🚀 PulseAttend Clean Attendance Portal running on port ${PORT}`);
+  console.log(`👤 Admin: Sagar Alapati (9704225352 / 9640000890)`);
   console.log(`====================================================`);
 });

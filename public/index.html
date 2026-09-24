@@ -3,595 +3,247 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PulseAttend - DBS Employee Attendance & Access Portal</title>
-  <!-- Google Fonts: Inter -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <!-- FontAwesome Icons -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <title>PulseAttend - DBS Employee Attendance System</title>
+  
+  <!-- FontAwesome & Google Fonts -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 
   <!-- =========================================================
-       SCREEN 1: HIGH SECURITY WELCOME & LOGIN SCREEN
+       SCREEN 1: SIMPLE WELCOME LOGIN (ADMIN ONLY)
        ========================================================= -->
-  <div id="welcomeLoginScreen" class="welcome-screen">
+  <div id="welcomeScreen" class="welcome-container">
     <div class="welcome-card">
       <div class="welcome-header">
         <div class="welcome-logo">
-          <i class="fa-solid fa-user-shield"></i>
+          <i class="fa-solid fa-clipboard-user text-yellow"></i>
         </div>
-        <h2>Pulse<span>Attend</span></h2>
-        <p class="welcome-tagline">DBS Workforce Attendance & Access Portal</p>
+        <h2>PulseAttend</h2>
+        <p class="welcome-subtitle">DBS Employee Attendance Portal</p>
       </div>
 
-      <!-- Real Login Form -->
-      <form id="welcomeLoginForm" onsubmit="handleWelcomeLogin(event)">
+      <form id="welcomeLoginForm" onsubmit="handleAdminLogin(event)">
         <div class="form-group">
-          <label for="welcomeUserSelect"><i class="fa-solid fa-user text-yellow"></i> Select Employee Name or DBS ID</label>
-          <select id="welcomeUserSelect" class="form-control-lg" onchange="syncWelcomeInput(this.value)">
-            <!-- Populated via JS -->
-          </select>
+          <label><i class="fa-solid fa-user text-yellow"></i> Admin Username / Phone</label>
+          <input type="text" id="loginUsername" class="form-control-lg" placeholder="9704225352 or DBS-540" value="9704225352" required>
         </div>
 
         <div class="form-group">
-          <label for="welcomeUserInput"><i class="fa-solid fa-phone text-yellow"></i> Or Enter Phone / DBS ID / Username *</label>
-          <input type="text" id="welcomeUserInput" class="form-control-lg" placeholder="e.g. 9704225352 or DBS-540" required>
+          <label><i class="fa-solid fa-lock text-yellow"></i> Admin Password</label>
+          <input type="password" id="loginPassword" class="form-control-lg" placeholder="Enter Password" value="9640000890" required>
         </div>
 
-        <div class="form-group">
-          <label for="welcomePassword"><i class="fa-solid fa-lock text-red"></i> Password / PIN *</label>
-          <input type="password" id="welcomePassword" class="form-control" placeholder="Enter your password..." required>
-        </div>
-
-        <button type="submit" class="btn-primary-yellow w-100 btn-login-submit">
-          <i class="fa-solid fa-shield-halved"></i> Authenticate & Continue
+        <button type="submit" class="btn-welcome-submit">
+          <i class="fa-solid fa-right-to-bracket"></i> LOG IN TO ATTENDANCE PORTAL
         </button>
       </form>
-      
-      <div class="welcome-footer">
-        <p><i class="fa-solid fa-shield-halved text-yellow"></i> Protected by DBS Enterprise PBKDF2 Encryption & SMS 2FA</p>
-      </div>
     </div>
   </div>
 
-
   <!-- =========================================================
-       SCREEN 2: MAIN PORTAL APP SCREEN (REVEALED AFTER AUTHENTICATION)
+       SCREEN 2: MAIN ATTENDANCE PORTAL
        ========================================================= -->
-  <div id="mainAppScreen" class="app-screen" style="display: none;">
-
-    <!-- Top Deployment Banner -->
-    <div class="deploy-banner">
-      <span><i class="fa-solid fa-cloud-arrow-up"></i> Render Cloud Ready • <strong>DBS Employee Attendance Portal</strong></span>
-      <a href="#render-guide-modal" onclick="openModal('render-guide-modal')" class="btn-banner"><i class="fa-solid fa-book-open"></i> Deploy Guide</a>
-    </div>
-
-    <!-- Main Navigation Header -->
-    <header class="navbar">
-      <div class="nav-container">
-        <div class="brand">
-          <div class="brand-logo">
-            <i class="fa-solid fa-user-shield"></i>
-          </div>
-          <div class="brand-text">
-            <h1>Pulse<span>Attend</span></h1>
-            <p class="tagline">DBS Workforce Portal</p>
-          </div>
+  <div id="appScreen" class="app-container" style="display: none;">
+    <!-- Top Header -->
+    <header class="app-header">
+      <div class="header-brand">
+        <div class="brand-icon"><i class="fa-solid fa-clipboard-user"></i></div>
+        <div class="brand-title">
+          <h1>PulseAttend</h1>
+          <span class="brand-badge">DBS Management</span>
         </div>
+      </div>
 
-        <!-- Center Nav Tabs -->
-        <nav class="nav-links">
-          <button class="nav-tab active" data-tab="status-tab"><i class="fa-solid fa-users-viewfinder"></i> Present / Absent / Half Day</button>
-          <button class="nav-tab" data-tab="clockin-tab"><i class="fa-solid fa-business-time"></i> Clock In / Out</button>
-          <button class="nav-tab" data-tab="leaves-tab"><i class="fa-solid fa-calendar-minus"></i> Apply Leave</button>
-          
-          <!-- Admin / Manager Only Navigation Tabs -->
-          <button class="nav-tab admin-only-tab" data-tab="dashboard-tab"><i class="fa-solid fa-chart-pie"></i> Executive Stats</button>
-          <button class="nav-tab admin-only-tab" data-tab="logs-tab"><i class="fa-solid fa-list-check"></i> All Logs</button>
-          <button class="nav-tab admin-only-tab" data-tab="employees-tab"><i class="fa-solid fa-users-gear"></i> Staff & Access Roles</button>
-        </nav>
-
-        <!-- Right Header Session Info -->
-        <div class="nav-actions">
-          <div id="userSessionBox" class="user-session-box">
-            <div class="user-session-avatar" id="headerUserAvatar">SA</div>
-            <div class="user-session-info">
-              <div class="user-session-name" id="headerUserName">Sagar Alapati</div>
-              <span class="badge badge-yellow" id="headerUserRoleBadge">Admin</span>
-            </div>
-            <button class="btn-sm btn-ghost" onclick="handleLogout()" title="Logout"><i class="fa-solid fa-right-from-bracket text-red"></i> Logout</button>
-          </div>
-
-          <button id="btnAddEmpHeader" class="btn-primary-red admin-only-action" onclick="openModal('add-employee-modal')" style="display:none;">
-            <i class="fa-solid fa-user-plus"></i> <span class="hide-mobile">Add Staff</span>
-          </button>
+      <div class="header-user">
+        <div class="user-avatar" id="headerUserAvatar">SA</div>
+        <div class="user-info">
+          <span class="user-name" id="headerUserName">Sagar Alapati</span>
+          <span class="badge badge-yellow">Admin</span>
         </div>
+        <button class="btn-logout" onclick="handleLogout()" title="Log Out">
+          <i class="fa-solid fa-arrow-right-from-bracket"></i>
+        </button>
       </div>
     </header>
 
-    <!-- Main Body Layout -->
-    <main class="main-content">
-      <div class="container">
-
-        <!-- Real-Time Date & Time Clock Banner Card -->
-        <section class="clock-banner-card">
-          <div class="clock-banner-content">
-            <div class="live-clock-wrapper">
-              <div class="live-time" id="liveTime">00:00:00 AM</div>
-              <div class="live-date" id="liveDate">Loading date...</div>
-            </div>
-            <div class="clock-quick-stats">
-              <div class="quick-pill yellow-pill">
-                <i class="fa-solid fa-shield-halved"></i> Admin: <strong>Sagar Alapati (DBS-540)</strong>
-              </div>
-              <div class="quick-pill red-pill">
-                <i class="fa-solid fa-users"></i> Total Roster: <strong>55 DBS Members</strong>
-              </div>
-            </div>
+    <!-- Main Content Layout -->
+    <main class="app-main">
+      <!-- Toolbar: Date Picker, Search & Quick Actions -->
+      <div class="controls-card">
+        <div class="controls-row">
+          <!-- Date Selector -->
+          <div class="control-group date-picker-group">
+            <label><i class="fa-solid fa-calendar-day text-yellow"></i> Attendance Date:</label>
+            <input type="date" id="selectedDateInput" class="form-control-date" onchange="handleDateChange()">
           </div>
-        </section>
 
-        <!-- TAB 1: PRESENT / ABSENT / HALF DAY ROSTER STATUS -->
-        <div id="status-tab" class="tab-pane active">
-          <div class="panel-card highlight-border-yellow">
-            <div class="panel-header header-with-actions">
-              <div>
-                <h3><i class="fa-solid fa-users-viewfinder text-yellow"></i> Today's Live Attendance Roster</h3>
-                <p class="subtitle">View member status (Present, Absent, Half Day, On Leave). <strong class="text-yellow admin-note">Admins can mark/update status directly.</strong></p>
-              </div>
-              <div class="filter-item search-box" style="max-width: 280px;">
-                <i class="fa-solid fa-magnifying-glass search-icon"></i>
-                <input type="text" id="searchRosterInput" placeholder="Search by name or DBS ID..." oninput="filterRosterStatus()">
-              </div>
-            </div>
+          <!-- Search Filter -->
+          <div class="control-group search-group">
+            <i class="fa-solid fa-magnifying-glass search-icon"></i>
+            <input type="text" id="searchEmployeeInput" class="form-control-search" placeholder="Search by Employee Name or DBS ID..." oninput="handleSearchInput()">
+          </div>
 
-            <!-- Roster Status Summary Chips -->
-            <div class="status-summary-bar">
-              <div class="status-chip chip-green" onclick="filterRosterByTag('Present')">
-                <i class="fa-solid fa-circle-check"></i> Present: <strong id="countPresent">0</strong>
-              </div>
-              <div class="status-chip chip-red" onclick="filterRosterByTag('Late')">
-                <i class="fa-solid fa-triangle-exclamation"></i> Late: <strong id="countLate">0</strong>
-              </div>
-              <div class="status-chip chip-purple" onclick="filterRosterByTag('Half Day')">
-                <i class="fa-solid fa-adjust"></i> Half Day: <strong id="countHalfDay">0</strong>
-              </div>
-              <div class="status-chip chip-orange" onclick="filterRosterByTag('On Leave')">
-                <i class="fa-solid fa-plane-departure"></i> On Leave: <strong id="countLeave">0</strong>
-              </div>
-              <div class="status-chip chip-gray" onclick="filterRosterByTag('Absent')">
-                <i class="fa-solid fa-circle-xmark"></i> Absent: <strong id="countAbsent">0</strong>
-              </div>
-              <div class="status-chip chip-yellow" onclick="filterRosterByTag('')">
-                <i class="fa-solid fa-border-all"></i> Show All (55)
-              </div>
-            </div>
+          <!-- Action Buttons -->
+          <div class="action-buttons-group">
+            <button type="button" class="btn-primary-yellow" onclick="openModal('add-employee-modal')">
+              <i class="fa-solid fa-user-plus"></i> Add Employee
+            </button>
+            <button type="button" class="btn-primary-excel" onclick="openModal('export-monthly-modal')">
+              <i class="fa-solid fa-file-excel"></i> Export Monthly Excel
+            </button>
+            <button type="button" class="btn-ghost-sm" onclick="handleMarkAll('Present')">
+              <i class="fa-solid fa-check-double text-green"></i> Mark All Present
+            </button>
+          </div>
+        </div>
+      </div>
 
-            <!-- Today Roster Grid -->
-            <div class="roster-grid" id="todayRosterGrid">
-              <!-- Dynamic employee cards with Admin Status Picker -->
-            </div>
+      <!-- Quick Summary Stats Bar -->
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-icon icon-blue"><i class="fa-solid fa-users"></i></div>
+          <div class="stat-details">
+            <span class="stat-value" id="statTotalEmp">0</span>
+            <span class="stat-label">Total Staff</span>
           </div>
         </div>
 
-        <!-- TAB 2: CLOCK IN / OUT TERMINAL -->
-        <div id="clockin-tab" class="tab-pane">
-          <div class="panel-card highlight-border-yellow">
-            <div class="panel-header">
-              <h2><i class="fa-solid fa-fingerprint text-yellow"></i> Employee Clock-in Terminal</h2>
-              <span class="badge badge-yellow">Online Check-in</span>
-            </div>
-
-            <div class="kiosk-grid">
-              <div class="kiosk-left">
-                <div class="kiosk-clock">
-                  <div id="kioskTime" class="kiosk-time-display">00:00:00</div>
-                  <div id="kioskDate" class="kiosk-date-display">Date</div>
-                </div>
-                <div class="kiosk-instructions">
-                  <div class="inst-step"><span class="step-num">1</span> Verify your employee selection.</div>
-                  <div class="inst-step"><span class="step-num">2</span> Select work location (HQ Office, Remote, Field).</div>
-                  <div class="inst-step"><span class="step-num">3</span> Click <strong>Clock In</strong> at start or <strong>Clock Out</strong> at end of shift.</div>
-                </div>
-              </div>
-
-              <div class="kiosk-right">
-                <form id="kioskForm" onsubmit="return false;">
-                  <div class="form-group">
-                    <label class="form-label-lg"><i class="fa-solid fa-user-tie text-yellow"></i> Employee Name / DBS ID:</label>
-                    <select id="kioskEmployeeSelect" class="form-control-lg" onchange="syncKioskEmployee()">
-                      <!-- Populated via JS -->
-                    </select>
-                  </div>
-
-                  <div class="kiosk-status-box" id="kioskStatusBox">
-                    <div class="kiosk-avatar" id="kioskAvatar">--</div>
-                    <div class="kiosk-info">
-                      <h4 id="kioskEmpName">Select Employee</h4>
-                      <span id="kioskStatusPill" class="badge badge-gray">Not Clocked In Today</span>
-                    </div>
-                  </div>
-
-                  <div class="form-group">
-                    <label><i class="fa-solid fa-building"></i> Work Location:</label>
-                    <select id="kioskLocation" class="form-control">
-                      <option value="HQ Office">HQ Office</option>
-                      <option value="Remote (Home)">Remote (Home)</option>
-                      <option value="Client Site">Client Site / Field</option>
-                    </select>
-                  </div>
-
-                  <div class="form-group">
-                    <label><i class="fa-solid fa-pencil"></i> Work Notes / Late Reason:</label>
-                    <input type="text" id="kioskNotes" class="form-control" placeholder="e.g. Working on Project X / Traffic delay">
-                  </div>
-
-                  <div class="kiosk-buttons">
-                    <button type="button" class="btn-clockin-lg" onclick="handleKioskClockIn()">
-                      <i class="fa-solid fa-person-circle-check"></i> CLOCK IN
-                    </button>
-                    <button type="button" class="btn-clockout-lg" onclick="handleKioskClockOut()">
-                      <i class="fa-solid fa-person-circle-minus"></i> CLOCK OUT
-                    </button>
-                  </div>
-                </form>
-              </div>
-            </div>
+        <div class="stat-card">
+          <div class="stat-icon icon-green"><i class="fa-solid fa-circle-check"></i></div>
+          <div class="stat-details">
+            <span class="stat-value" id="statPresent">0</span>
+            <span class="stat-label">Present</span>
           </div>
         </div>
 
-        <!-- TAB 3: APPLY LEAVE -->
-        <div id="leaves-tab" class="tab-pane">
-          <div class="grid-2col">
-            <div class="panel-card">
-              <div class="panel-header">
-                <h3><i class="fa-solid fa-paper-plane text-yellow"></i> Submit Leave Application</h3>
-              </div>
-              <form id="leaveRequestForm" onsubmit="handleLeaveSubmit(event)">
-                <div class="form-group">
-                  <label for="leaveEmployeeSelect">Employee Name:</label>
-                  <select id="leaveEmployeeSelect" class="form-control" required>
-                    <!-- Populated via JS -->
-                  </select>
-                </div>
-
-                <div class="form-group">
-                  <label for="leaveType">Leave Type:</label>
-                  <select id="leaveType" class="form-control" required>
-                    <option value="Casual Leave">Casual Leave</option>
-                    <option value="Sick Leave">Sick Leave</option>
-                    <option value="Annual Leave">Annual Leave</option>
-                    <option value="Unpaid Leave">Unpaid Leave</option>
-                  </select>
-                </div>
-
-                <div class="form-row">
-                  <div class="form-group col-6">
-                    <label for="leaveStartDate">Start Date:</label>
-                    <input type="date" id="leaveStartDate" class="form-control" required>
-                  </div>
-                  <div class="form-group col-6">
-                    <label for="leaveEndDate">End Date:</label>
-                    <input type="date" id="leaveEndDate" class="form-control" required>
-                  </div>
-                </div>
-
-                <div class="form-group">
-                  <label for="leaveReason">Reason for Leave:</label>
-                  <textarea id="leaveReason" class="form-control" rows="3" placeholder="State clear reason..." required></textarea>
-                </div>
-
-                <button type="submit" class="btn-primary-red w-100">
-                  <i class="fa-solid fa-paper-plane"></i> Submit Application
-                </button>
-              </form>
-            </div>
-
-            <div class="panel-card">
-              <div class="panel-header">
-                <h3><i class="fa-solid fa-folder-open text-red"></i> Leave Applications</h3>
-                <span class="badge badge-red" id="pendingLeaveCount">0 Pending</span>
-              </div>
-              <div class="leave-list" id="leaveApplicationsList">
-                <!-- Dynamic leaves -->
-              </div>
-            </div>
+        <div class="stat-card">
+          <div class="stat-icon icon-red"><i class="fa-solid fa-circle-xmark"></i></div>
+          <div class="stat-details">
+            <span class="stat-value" id="statAbsent">0</span>
+            <span class="stat-label">Absent</span>
           </div>
         </div>
 
-        <!-- TAB 4: EXECUTIVE STATS (Admin Only) -->
-        <div id="dashboard-tab" class="tab-pane">
-          <section class="stats-grid">
-            <div class="stat-card card-yellow">
-              <div class="stat-header">
-                <span class="stat-label">Total Roster</span>
-                <div class="stat-icon yellow-icon"><i class="fa-solid fa-users-gear"></i></div>
-              </div>
-              <div class="stat-value" id="statTotalEmployees">55</div>
-              <div class="stat-subtext">DBS Employees</div>
-            </div>
-
-            <div class="stat-card card-green">
-              <div class="stat-header">
-                <span class="stat-label">Present Today</span>
-                <div class="stat-icon green-icon"><i class="fa-solid fa-circle-check"></i></div>
-              </div>
-              <div class="stat-value" id="statPresentToday">0</div>
-              <div class="stat-subtext">Clocked-in Members</div>
-            </div>
-
-            <div class="stat-card card-red">
-              <div class="stat-header">
-                <span class="stat-label">Late Arrival</span>
-                <div class="stat-icon red-icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
-              </div>
-              <div class="stat-value" id="statLateToday">0</div>
-              <div class="stat-subtext">After 09:15 AM</div>
-            </div>
-
-            <div class="stat-card card-orange">
-              <div class="stat-header">
-                <span class="stat-label">On Leave</span>
-                <div class="stat-icon orange-icon"><i class="fa-solid fa-plane-departure"></i></div>
-              </div>
-              <div class="stat-value" id="statOnLeave">0</div>
-              <div class="stat-subtext">Approved Leaves</div>
-            </div>
-
-            <div class="stat-card card-yellow-dark">
-              <div class="stat-header">
-                <span class="stat-label">Attendance Rate</span>
-                <div class="stat-icon yellow-dark-icon"><i class="fa-solid fa-chart-line"></i></div>
-              </div>
-              <div class="stat-value" id="statAttendanceRate">0%</div>
-              <div class="progress-bar-container">
-                <div class="progress-bar" id="statProgressBar" style="width: 0%;"></div>
-              </div>
-            </div>
-          </section>
-
-          <div class="panel-card highlight-border-red">
-            <div class="panel-header">
-              <h3><i class="fa-solid fa-wave-square text-red"></i> Live Clock Activity Stream</h3>
-              <button class="btn-sm btn-ghost" onclick="fetchTodayActivity()"><i class="fa-solid fa-rotate"></i> Refresh</button>
-            </div>
-            <div class="activity-feed-wrapper" id="activityFeedList">
-              <!-- Dynamic activity -->
-            </div>
+        <div class="stat-card">
+          <div class="stat-icon icon-purple"><i class="fa-solid fa-adjust"></i></div>
+          <div class="stat-details">
+            <span class="stat-value" id="statHalfDay">0</span>
+            <span class="stat-label">Half Day</span>
           </div>
         </div>
 
-        <!-- TAB 5: ALL LOGS & CSV EXPORT (Admin Only) -->
-        <div id="logs-tab" class="tab-pane">
-          <div class="panel-card">
-            <div class="panel-header header-with-actions">
-              <div>
-                <h3><i class="fa-solid fa-clipboard-list text-yellow"></i> Complete Attendance History Logs</h3>
-                <p class="subtitle">Search, filter, and export full attendance records.</p>
-              </div>
-              <button class="btn-export-csv" onclick="downloadCSVReport()">
-                <i class="fa-solid fa-file-csv"></i> Export CSV Report
-              </button>
-            </div>
-
-            <div class="filter-bar">
-              <div class="filter-item search-box">
-                <i class="fa-solid fa-magnifying-glass search-icon"></i>
-                <input type="text" id="searchLogInput" placeholder="Search by name, DBS ID, notes..." oninput="applyLogFilters()">
-              </div>
-
-              <div class="filter-item">
-                <label for="filterDate">Date:</label>
-                <input type="date" id="filterDate" onchange="applyLogFilters()">
-              </div>
-
-              <div class="filter-item">
-                <label for="filterDepartment">Department:</label>
-                <select id="filterDepartment" onchange="applyLogFilters()">
-                  <option value="">All Departments</option>
-                  <option value="Engineering">Engineering</option>
-                  <option value="Operations">Operations</option>
-                  <option value="HR">HR</option>
-                  <option value="Sales">Sales</option>
-                  <option value="Support">Support</option>
-                  <option value="Design">Design</option>
-                </select>
-              </div>
-
-              <div class="filter-item">
-                <label for="filterStatus">Status:</label>
-                <select id="filterStatus" onchange="applyLogFilters()">
-                  <option value="">All Statuses</option>
-                  <option value="Present">Present</option>
-                  <option value="Late">Late</option>
-                  <option value="Half Day">Half Day</option>
-                  <option value="Clocked Out">Clocked Out</option>
-                  <option value="Absent">Absent</option>
-                </select>
-              </div>
-
-              <button class="btn-sm btn-outline-yellow" onclick="resetLogFilters()"><i class="fa-solid fa-rotate-left"></i> Reset</button>
-            </div>
-
-            <div class="table-responsive">
-              <table class="data-table">
-                <thead>
-                  <tr>
-                    <th>Employee</th>
-                    <th>Department</th>
-                    <th>Date</th>
-                    <th>Clock In</th>
-                    <th>Clock Out</th>
-                    <th>Status</th>
-                    <th>Location</th>
-                    <th>Notes</th>
-                  </tr>
-                </thead>
-                <tbody id="attendanceTableBody">
-                  <!-- Populated via JS -->
-                </tbody>
-              </table>
-            </div>
+        <div class="stat-card">
+          <div class="stat-icon icon-yellow"><i class="fa-solid fa-plane-departure"></i></div>
+          <div class="stat-details">
+            <span class="stat-value" id="statLeave">0</span>
+            <span class="stat-label">On Leave</span>
           </div>
         </div>
+      </div>
 
-        <!-- TAB 6: STAFF ROSTER & ACCESS ROLE DELEGATION (Admin Only) -->
-        <div id="employees-tab" class="tab-pane">
-          <div class="panel-card">
-            <div class="panel-header header-with-actions">
-              <div>
-                <h3><i class="fa-solid fa-shield-halved text-yellow"></i> Staff Roster & Role Access Management</h3>
-                <p class="subtitle">Admins can grant Full Admin, Manager, or Team Lead permissions to any member.</p>
-              </div>
-              <button class="btn-primary-yellow" onclick="openModal('add-employee-modal')">
-                <i class="fa-solid fa-user-plus"></i> Add New Member
-              </button>
-            </div>
-
-            <div class="staff-grid" id="staffGrid">
-              <!-- Dynamic staff grid -->
-            </div>
-          </div>
+      <!-- Main Employees Attendance Roster Table -->
+      <div class="table-card">
+        <div class="table-header">
+          <h3>
+            <i class="fa-solid fa-list-check text-yellow"></i> 
+            Employee Roster & Attendance Status 
+            <span class="date-badge" id="currentDateBadge">Date</span>
+          </h3>
         </div>
 
+        <div class="table-responsive">
+          <table class="attendance-table">
+            <thead>
+              <tr>
+                <th>Employee / DBS ID</th>
+                <th>Department</th>
+                <th class="text-center">Mark Attendance Status</th>
+                <th class="text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody id="attendanceTableBody">
+              <!-- Rendered via JS -->
+            </tbody>
+          </table>
+        </div>
       </div>
     </main>
-
-    <!-- Mobile Bottom Navigation Bar -->
-    <nav class="mobile-bottom-nav">
-      <button class="mobile-nav-btn active" data-tab="status-tab">
-        <i class="fa-solid fa-users-viewfinder"></i>
-        <span>Present</span>
-      </button>
-      <button class="mobile-nav-btn" data-tab="clockin-tab">
-        <i class="fa-solid fa-stopwatch"></i>
-        <span>Clock In</span>
-      </button>
-      <button class="mobile-nav-btn" data-tab="leaves-tab">
-        <i class="fa-solid fa-calendar-minus"></i>
-        <span>Leaves</span>
-      </button>
-      <button class="mobile-nav-btn admin-only-tab" data-tab="logs-tab">
-        <i class="fa-solid fa-list-check"></i>
-        <span>Logs</span>
-      </button>
-      <button class="mobile-nav-btn admin-only-tab" data-tab="employees-tab">
-        <i class="fa-solid fa-users-gear"></i>
-        <span>Roles</span>
-      </button>
-    </nav>
   </div>
 
-  <!-- MODAL 1: ADMIN SMS 2FA OTP MODAL -->
-  <div class="modal-overlay" id="2fa-otp-modal">
-    <div class="modal-card">
-      <div class="modal-header" style="border-bottom-color: var(--yellow-primary);">
-        <h3><i class="fa-solid fa-mobile-screen-button text-yellow"></i> Admin SMS 2FA Verification</h3>
-        <button class="modal-close" onclick="closeModal('2fa-otp-modal')">&times;</button>
-      </div>
-      <form id="otpVerifyForm" onsubmit="handleVerify2FA(event)">
-        <div class="modal-body text-center" style="text-align: center;">
-          <div style="font-size: 2.5rem; color: var(--yellow-primary); margin-bottom: 8px;">
-            <i class="fa-solid fa-comments"></i>
-          </div>
-          <h4 style="font-size:1.1rem; font-weight:700;">Enter 6-Digit SMS Security Code</h4>
-          <p style="font-size:0.85rem; color:var(--text-muted); margin-top:4px;" id="otpSubtext">
-            SMS 2FA OTP sent to Admin mobile <strong>+91 9704225352</strong>
-          </p>
-
-          <div class="form-group" style="margin-top: 20px;">
-            <input type="text" id="otpCodeInput" class="form-control-lg text-center" placeholder="------" maxlength="6" style="letter-spacing: 8px; font-size: 1.5rem; text-align: center;" required>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn-ghost" onclick="closeModal('2fa-otp-modal')">Cancel</button>
-          <button type="submit" class="btn-primary-yellow"><i class="fa-solid fa-shield-check"></i> Verify & Login</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- MODAL 2: ADD EMPLOYEE MODAL -->
+  <!-- =========================================================
+       MODAL 1: ADD NEW EMPLOYEE MODAL
+       ========================================================= -->
   <div class="modal-overlay" id="add-employee-modal">
     <div class="modal-card">
       <div class="modal-header">
-        <h3><i class="fa-solid fa-user-plus text-yellow"></i> Register New Staff Member</h3>
+        <h3><i class="fa-solid fa-user-plus text-yellow"></i> Add New DBS Employee</h3>
         <button class="modal-close" onclick="closeModal('add-employee-modal')">&times;</button>
       </div>
       <form id="addEmployeeForm" onsubmit="handleAddEmployee(event)">
         <div class="modal-body">
           <div class="form-group">
-            <label for="newEmpName">Full Name *</label>
+            <label for="newEmpName">Full Employee Name *</label>
             <input type="text" id="newEmpName" class="form-control" placeholder="e.g. Ramesh Varma" required>
           </div>
 
-          <div class="form-row">
-            <div class="form-group col-6">
-              <label for="newEmpDept">Department *</label>
-              <select id="newEmpDept" class="form-control" required>
-                <option value="Engineering">Engineering</option>
-                <option value="Operations">Operations</option>
-                <option value="HR">HR</option>
-                <option value="Sales">Sales</option>
-                <option value="Support">Support</option>
-                <option value="Design">Design</option>
-              </select>
-            </div>
-            <div class="form-group col-6">
-              <label for="newEmpRoleType">Access Role Level *</label>
-              <select id="newEmpRoleType" class="form-control" required>
-                <option value="Employee">Employee</option>
-                <option value="Team Lead">Team Lead (TL)</option>
-                <option value="Manager">Manager</option>
-                <option value="Admin">Admin (Full Control)</option>
-              </select>
-            </div>
+          <div class="form-group">
+            <label for="newEmpId">DBS Employee ID (Optional)</label>
+            <input type="text" id="newEmpId" class="form-control" placeholder="e.g. DBS-25199 (auto-generated if empty)">
           </div>
 
-          <div class="form-row">
-            <div class="form-group col-6">
-              <label for="newEmpEmail">Email Address</label>
-              <input type="email" id="newEmpEmail" class="form-control" placeholder="name@dbs.com">
-            </div>
-            <div class="form-group col-6">
-              <label for="newEmpShift">Shift Schedule</label>
-              <input type="text" id="newEmpShift" class="form-control" value="09:00 - 17:00">
-            </div>
+          <div class="form-group">
+            <label for="newEmpDept">Department</label>
+            <select id="newEmpDept" class="form-control">
+              <option value="Operations">Operations</option>
+              <option value="Engineering">Engineering</option>
+              <option value="HR">HR</option>
+              <option value="Sales">Sales</option>
+              <option value="Support">Support</option>
+              <option value="Design">Design</option>
+              <option value="Executive Management">Executive Management</option>
+            </select>
           </div>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn-ghost" onclick="closeModal('add-employee-modal')">Cancel</button>
-          <button type="submit" class="btn-primary-yellow"><i class="fa-solid fa-save"></i> Register Staff</button>
+          <button type="submit" class="btn-primary-yellow"><i class="fa-solid fa-save"></i> Save Employee</button>
         </div>
       </form>
     </div>
   </div>
 
-  <!-- MODAL 3: DEPLOYMENT GUIDE MODAL -->
-  <div class="modal-overlay" id="render-guide-modal">
-    <div class="modal-card modal-lg">
+  <!-- =========================================================
+       MODAL 2: EXPORT MONTHLY EXCEL REPORT MODAL
+       ========================================================= -->
+  <div class="modal-overlay" id="export-monthly-modal">
+    <div class="modal-card">
       <div class="modal-header">
-        <h3><i class="fa-solid fa-cloud-arrow-up text-red"></i> Deploy Online to Render.com</h3>
-        <button class="modal-close" onclick="closeModal('render-guide-modal')">&times;</button>
+        <h3><i class="fa-solid fa-file-excel text-green"></i> Export Monthly Attendance Excel</h3>
+        <button class="modal-close" onclick="closeModal('export-monthly-modal')">&times;</button>
       </div>
-      <div class="modal-body markdown-style">
-        <p>This project is live-pushed to GitHub at <a href="https://github.com/alapatisagar/MAIN-ATTENDANCE" target="_blank">https://github.com/alapatisagar/MAIN-ATTENDANCE</a>!</p>
-        <ol class="deploy-steps">
-          <li><strong>1. Open Render Dashboard:</strong> Go to <a href="https://dashboard.render.com" target="_blank">Render.com</a> and click <em>New +</em> &rarr; <em>Web Service</em>.</li>
-          <li><strong>2. Connect Repository:</strong> Select <code>alapatisagar/MAIN-ATTENDANCE</code>.</li>
-          <li><strong>3. Deploy:</strong> Build Command: <code>npm install</code>, Start Command: <code>npm start</code>.</li>
-        </ol>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn-primary-red" onclick="closeModal('render-guide-modal')">Close</button>
-      </div>
+      <form id="exportMonthlyForm" onsubmit="handleExportMonthly(event)">
+        <div class="modal-body">
+          <p class="modal-description">
+            Select the month and year to generate a complete summary report listing all employees with total Present, Absent, Half Day, and Leave counts.
+          </p>
+
+          <div class="form-group">
+            <label for="exportMonthInput"><i class="fa-solid fa-calendar-days text-yellow"></i> Select Month & Year *</label>
+            <input type="month" id="exportMonthInput" class="form-control-lg" required>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-ghost" onclick="closeModal('export-monthly-modal')">Cancel</button>
+          <button type="submit" class="btn-primary-excel"><i class="fa-solid fa-download"></i> Download Excel Report</button>
+        </div>
+      </form>
     </div>
   </div>
 
-  <!-- Notification Toast Container -->
+  <!-- Toast Notification Container -->
   <div id="toastContainer" class="toast-container"></div>
 
   <script src="js/app.js"></script>

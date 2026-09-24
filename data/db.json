@@ -740,6 +740,16 @@
       "status": "Present",
       "location": "HQ Office",
       "notes": "On-time check-in"
+    },
+    {
+      "id": "ATT-1790278017872-1",
+      "employeeId": "DBS-25132",
+      "employeeName": "Siva Naga Nikhil Krishna Kurra",
+      "department": "Engineering",
+      "date": "2026-09-25",
+      "status": "Present",
+      "notes": "",
+      "updatedAt": "2026-09-24T19:26:57.873Z"
     }
   ],
   "leaves": [
