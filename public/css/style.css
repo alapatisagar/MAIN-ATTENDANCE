@@ -267,6 +267,27 @@ body {
   color: var(--yellow-text);
 }
 
+.btn-header-action {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s;
+}
+
+.btn-header-action:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--yellow-primary);
+  color: var(--yellow-primary);
+}
+
 .btn-logout {
   background: transparent;
   border: 1px solid var(--border-color);

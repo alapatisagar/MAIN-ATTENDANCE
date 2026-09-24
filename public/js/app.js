@@ -1,5 +1,5 @@
 /* ---------------------------------------------------------
-   PulseAttend - AR Callers Attendance Portal JS
+   AR Callers Attendance Portal JS
    --------------------------------------------------------- */
 
 const API_BASE = '/api';
@@ -28,8 +28,8 @@ function initApp() {
   const monthInput = document.getElementById('exportMonthInput');
   if (monthInput) monthInput.value = currentMonth;
 
-  const savedUser = localStorage.getItem('pulseattend_user');
-  const savedToken = localStorage.getItem('pulseattend_token');
+  const savedUser = localStorage.getItem('arcallers_user');
+  const savedToken = localStorage.getItem('arcallers_token');
 
   if (savedUser && savedToken) {
     state.currentUser = JSON.parse(savedUser);
@@ -51,7 +51,7 @@ function showAppScreen() {
 
   const user = state.currentUser;
   if (user) {
-    document.getElementById('headerUserName').textContent = user.name || 'Sagar Alapati';
+    document.getElementById('headerUserName').textContent = user.name || 'Admin User';
     const avatar = document.getElementById('headerUserAvatar');
     if (avatar) avatar.textContent = getInitials(user.name);
   }
@@ -60,7 +60,7 @@ function showAppScreen() {
 }
 
 /* ---------------------------------------------------------
-   1. AUTHENTICATION (NO 2FA)
+   1. AUTHENTICATION & PASSWORD MANAGEMENT
    --------------------------------------------------------- */
 async function handleAdminLogin(e) {
   e.preventDefault();
@@ -69,7 +69,7 @@ async function handleAdminLogin(e) {
   const password = document.getElementById('loginPassword').value;
 
   if (!usernameOrId || !password) {
-    showToast('Please enter username and password', 'error');
+    showToast('Please enter username/phone and password', 'error');
     return;
   }
 
@@ -88,10 +88,10 @@ async function handleAdminLogin(e) {
 
     state.currentUser = data.user;
     state.token = data.token;
-    localStorage.setItem('pulseattend_user', JSON.stringify(data.user));
-    localStorage.setItem('pulseattend_token', data.token);
+    localStorage.setItem('arcallers_user', JSON.stringify(data.user));
+    localStorage.setItem('arcallers_token', data.token);
 
-    showToast(`Welcome Admin ${data.user.name}!`, 'success');
+    showToast(`Welcome ${data.user.name}! Logged in as Admin.`, 'success');
     showAppScreen();
   } catch (err) {
     showToast('Network error during login', 'error');
@@ -101,10 +101,52 @@ async function handleAdminLogin(e) {
 function handleLogout() {
   state.currentUser = null;
   state.token = null;
-  localStorage.removeItem('pulseattend_user');
-  localStorage.removeItem('pulseattend_token');
+  localStorage.removeItem('arcallers_user');
+  localStorage.removeItem('arcallers_token');
   showWelcomeScreen();
   showToast('Logged out successfully', 'success');
+}
+
+async function handleChangePassword(e) {
+  e.preventDefault();
+
+  const currentPassword = document.getElementById('currentPasswordInput').value;
+  const newPassword = document.getElementById('newPasswordInput').value;
+  const confirmPassword = document.getElementById('confirmPasswordInput').value;
+
+  if (!state.currentUser) {
+    showToast('You must be logged in to change password', 'error');
+    return;
+  }
+
+  if (newPassword !== confirmPassword) {
+    showToast('New password and confirm password do not match', 'error');
+    return;
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/auth/change-password`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: state.currentUser.id,
+        currentPassword,
+        newPassword
+      })
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      showToast(data.error || 'Failed to update password', 'error');
+      return;
+    }
+
+    showToast('Password updated successfully!', 'success');
+    closeModal('change-password-modal');
+    document.getElementById('changePasswordForm').reset();
+  } catch (err) {
+    showToast('Error updating password', 'error');
+  }
 }
 
 /* ---------------------------------------------------------
@@ -238,7 +280,7 @@ function renderAttendanceTable() {
           </div>
         </td>
         <td class="text-right">
-          ${emp.employeeId !== 'DBS-540' ? `
+          ${emp.employeeId !== 'DBS-540' && emp.employeeId !== 'DBS-7569' ? `
             <button class="btn-delete" onclick="handleDeleteEmployee('${emp.employeeId}', '${escapeHTML(emp.name)}')" title="Delete Employee">
               <i class="fa-solid fa-trash-can"></i>
             </button>

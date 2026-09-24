@@ -37,7 +37,7 @@ function hashPassword(password) {
   return crypto.pbkdf2Sync(password, salt, 10000, 64, 'sha512').toString('hex');
 }
 
-// 55 Real DBS Employees List (All in AR Callers Department)
+// 55 Real DBS Employees List + Admin Accounts
 const RAW_STAFF_LIST = [
   { id: 'DBS-25132', name: 'Siva Naga Nikhil Krishna Kurra' },
   { id: 'DBS-2519', name: 'Shiloni Sastry Dunna' },
@@ -89,7 +89,8 @@ const RAW_STAFF_LIST = [
   { id: 'DBS-306', name: 'Rajesh Dhabbakuti' },
   { id: 'DBS-2661', name: 'Pendyala Venkata Ramesh' },
   { id: 'DBS-2617', name: 'Karthik Dividevara' },
-  { id: 'DBS-540', name: 'Sagar Alapati', roleType: 'Admin', phone: '9704225352' },
+  { id: 'DBS-540', name: 'Sagar Alapati', roleType: 'Admin', phone: '9704225352', pass: '9640000890' },
+  { id: 'DBS-7569', name: 'Co-Admin User', roleType: 'Admin', phone: '7569258789', pass: 'Admin@123' },
   { id: 'DBS-25158', name: 'Atla Naga Venu' },
   { id: 'DBS-550', name: 'Prathyush Raj Bontha' },
   { id: 'DBS-25138', name: 'Surendra Gudvalli' },
@@ -100,12 +101,12 @@ function getInitialData() {
   const avatarColors = ['#EF4444', '#F59E0B', '#DC2626', '#D97706', '#B91C1C', '#EAB308'];
 
   const employees = RAW_STAFF_LIST.map((item, index) => {
-    const isAdmin = item.id === 'DBS-540' || item.name.toLowerCase().includes('sagar alapati');
-    const rawPass = isAdmin ? '9640000890' : item.id;
+    const isAdmin = item.roleType === 'Admin' || item.id === 'DBS-540' || item.id === 'DBS-7569';
+    const rawPass = item.pass || (isAdmin ? '9640000890' : item.id);
     return {
       id: item.id,
       name: item.name,
-      phone: item.phone || (isAdmin ? '9704225352' : ''),
+      phone: item.phone || '',
       department: 'AR Callers',
       role: isAdmin ? 'System Administrator' : 'AR Caller',
       roleType: isAdmin ? 'Admin' : 'Employee',
@@ -134,10 +135,28 @@ function loadDB() {
       saveDB(initial);
       return initial;
     }
+
     // Force all employees to AR Callers department
     db.employees.forEach(e => {
       e.department = 'AR Callers';
     });
+
+    // Ensure Admin 2 (7569258789) exists
+    let admin2 = db.employees.find(e => e.phone === '7569258789' || e.id === 'DBS-7569');
+    if (!admin2) {
+      db.employees.push({
+        id: 'DBS-7569',
+        name: 'Co-Admin User',
+        phone: '7569258789',
+        department: 'AR Callers',
+        role: 'System Administrator',
+        roleType: 'Admin',
+        passwordHash: hashPassword('Admin@123'),
+        avatarColor: '#F59E0B'
+      });
+      saveDB(db);
+    }
+
     return db;
   } catch (err) {
     const initial = getInitialData();
@@ -154,7 +173,7 @@ function saveDB(data) {
 // REST API ENDPOINTS
 // ---------------------------------------------------------
 
-// 1. Direct Admin Login (NO 2FA)
+// 1. Direct Login (Supports 9704225352 & 7569258789)
 app.post('/api/auth/login', (req, res) => {
   const db = loadDB();
   const { usernameOrId, password } = req.body;
@@ -184,7 +203,7 @@ app.post('/api/auth/login', (req, res) => {
   activeSessions.set(token, {
     userId: user.id,
     roleType: user.roleType || 'Admin',
-    expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000 // 30 days
+    expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000
   });
 
   res.json({
@@ -198,6 +217,38 @@ app.post('/api/auth/login', (req, res) => {
       roleType: user.roleType || 'Admin',
       avatarColor: user.avatarColor
     }
+  });
+});
+
+// 1b. Change Password Endpoint
+app.put('/api/auth/change-password', (req, res) => {
+  const db = loadDB();
+  const { userId, currentPassword, newPassword } = req.body;
+
+  if (!userId || !currentPassword || !newPassword) {
+    return res.status(400).json({ error: 'User ID, current password, and new password are required' });
+  }
+
+  const user = db.employees.find(e => e.id === userId || (e.phone && e.phone === userId));
+  if (!user) {
+    return res.status(404).json({ error: 'User account not found' });
+  }
+
+  const currentHash = hashPassword(currentPassword.trim());
+  if (user.passwordHash !== currentHash) {
+    return res.status(401).json({ error: 'Incorrect current password' });
+  }
+
+  if (newPassword.trim().length < 4) {
+    return res.status(400).json({ error: 'New password must be at least 4 characters long' });
+  }
+
+  user.passwordHash = hashPassword(newPassword.trim());
+  saveDB(db);
+
+  res.json({
+    success: true,
+    message: 'Password updated successfully'
   });
 });
 
@@ -244,8 +295,8 @@ app.delete('/api/employees/:id', (req, res) => {
   const db = loadDB();
   const { id } = req.params;
 
-  if (id === 'DBS-540') {
-    return res.status(400).json({ error: 'Cannot delete primary Admin Sagar Alapati' });
+  if (id === 'DBS-540' || id === 'DBS-7569') {
+    return res.status(400).json({ error: 'Cannot delete primary Admin accounts' });
   }
 
   const index = db.employees.findIndex(e => e.id === id);
@@ -265,13 +316,12 @@ app.get('/api/attendance', (req, res) => {
   const targetDate = req.query.date || new Date().toISOString().split('T')[0];
 
   const dateObj = new Date(targetDate + 'T00:00:00');
-  const dayOfWeek = dateObj.getDay(); // 0 = Sunday, 6 = Saturday
+  const dayOfWeek = dateObj.getDay();
   const isWeekend = (dayOfWeek === 0 || dayOfWeek === 6);
 
   const records = db.employees.map(emp => {
     const att = (db.attendance || []).find(a => a.employeeId === emp.id && a.date === targetDate);
     
-    // Default to 'Holiday / Off' for weekends if unmarked
     let status = att ? att.status : (isWeekend ? 'Holiday / Off' : 'Unmarked');
 
     return {
@@ -456,7 +506,7 @@ app.get('/api/export/monthly-excel', (req, res) => {
   });
 
   let csv = '\uFEFF';
-  csv += `PulseAttend Monthly Attendance Summary - Month: ${monthQuery}\n`;
+  csv += `AR Callers Monthly Attendance Summary - Month: ${monthQuery}\n`;
   csv += `Generated On: ${new Date().toLocaleString('en-US')}\n\n`;
   csv += `DBS ID,Employee Name,Department,Days Present,Days Absent,Half Days,Holiday / Off Days,Total Days Recorded\n`;
 
@@ -466,14 +516,14 @@ app.get('/api/export/monthly-excel', (req, res) => {
   });
 
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-  res.setHeader('Content-Disposition', `attachment; filename=PulseAttend_Monthly_Attendance_${monthQuery}.csv`);
+  res.setHeader('Content-Disposition', `attachment; filename=AR_Callers_Monthly_Attendance_${monthQuery}.csv`);
   res.send(csv);
 });
 
 app.listen(PORT, () => {
   console.log(`====================================================`);
-  console.log(`🚀 PulseAttend Clean Attendance Portal running on port ${PORT}`);
-  console.log(`🏢 Department: All Employees set to "AR Callers"`);
-  console.log(`👤 Admin: Sagar Alapati (9704225352 / 9640000890)`);
+  console.log(`🚀 AR Callers Attendance Portal running on port ${PORT}`);
+  console.log(`👤 Primary Admin: 9704225352 / 9640000890`);
+  console.log(`👤 Co-Admin: 7569258789 / Admin@123`);
   console.log(`====================================================`);
 });

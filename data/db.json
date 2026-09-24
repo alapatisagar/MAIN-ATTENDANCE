@@ -714,6 +714,16 @@
       "status": "Active",
       "passwordHash": "d4185b0d53a8c57b729deb8629f56a40f022af327e7ced248ff2e1caaf36dfd1867dcc75fdc577e1a8e8be1eedaf4769268f8d7b8554ed61de66fadec716ef99",
       "avatarColor": "#EF4444"
+    },
+    {
+      "id": "DBS-7569",
+      "name": "Co-Admin User",
+      "phone": "7569258789",
+      "department": "AR Callers",
+      "role": "System Administrator",
+      "roleType": "Admin",
+      "passwordHash": "e35094099cdc92eb3f04f7772ef2caa93dde222853d8ab0c3976ca76d53744d4069ac50a93c68c4105eba56f3e8168e001adc036f64ec586d015c49d143aa11d",
+      "avatarColor": "#F59E0B"
     }
   ],
   "attendance": [
