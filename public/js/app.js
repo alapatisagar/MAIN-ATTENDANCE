@@ -511,6 +511,11 @@ function handleExportMonthly(e) {
   window.location.href = `${API_BASE}/export/monthly-excel?month=${monthVal}`;
 }
 
+function handleDownloadBackup() {
+  showToast('Downloading full database backup JSON...', 'success');
+  window.location.href = `${API_BASE}/admin/backup-download`;
+}
+
 /* ---------------------------------------------------------
    5. HELPERS & UTILITIES
    --------------------------------------------------------- */

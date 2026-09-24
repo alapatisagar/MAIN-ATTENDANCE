@@ -396,6 +396,48 @@ app.delete('/api/employees/:id', (req, res) => {
   });
 });
 
+// 4b. Edit Employee Name or DBS ID
+app.put('/api/employees/:id', (req, res) => {
+  const db = loadDB();
+  const { id } = req.params;
+  const { name, newId } = req.body;
+
+  const emp = db.employees.find(e => e.id === id);
+  if (!emp) {
+    return res.status(404).json({ error: 'Employee not found' });
+  }
+
+  if (name) emp.name = name.trim();
+  if (newId && newId.trim() !== id) {
+    const existing = db.employees.find(e => e.id === newId.trim());
+    if (existing) {
+      return res.status(400).json({ error: `DBS ID ${newId} already exists` });
+    }
+    // Update employee ID in attendance history as well
+    const oldId = emp.id;
+    emp.id = newId.trim();
+    if (db.attendance) {
+      db.attendance.forEach(a => {
+        if (a.employeeId === oldId) a.employeeId = emp.id;
+      });
+    }
+  }
+
+  saveDB(db);
+  res.json({ success: true, message: 'Employee updated successfully', employee: emp });
+});
+
+// 4c. Download Full Database JSON Backup
+app.get('/api/admin/backup-download', (req, res) => {
+  const db = loadDB();
+  const dateStr = new Date().toISOString().split('T')[0];
+  const jsonContent = JSON.stringify(db, null, 2);
+
+  res.setHeader('Content-Type', 'application/json');
+  res.setHeader('Content-Disposition', `attachment; filename=AR_Callers_DB_Backup_${dateStr}.json`);
+  res.send(jsonContent);
+});
+
 // 5. Get Attendance Records for a Specific Date
 app.get('/api/attendance', (req, res) => {
   const db = loadDB();

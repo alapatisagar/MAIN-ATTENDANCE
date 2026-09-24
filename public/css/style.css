@@ -899,5 +899,41 @@ body {
   to { transform: translateX(0); opacity: 1; }
 }
 
+/* Print Optimization */
+@media print {
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+  .app-header, .controls-card, .filter-tabs, .btn-header-action, .btn-logout, .action-buttons-group, .btn-delete, .modal-overlay, .toast-container {
+    display: none !important;
+  }
+  .app-container, .app-main, .table-card {
+    padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+  }
+  .attendance-table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    color: #000 !important;
+  }
+  .attendance-table th, .attendance-table td {
+    border: 1px solid #ccc !important;
+    padding: 8px !important;
+    color: #000 !important;
+  }
+  .status-pill.active {
+    border: 1px solid #000 !important;
+    color: #000 !important;
+    background: #e2e8f0 !important;
+  }
+  .status-pill:not(.active) {
+    display: none !important;
+  }
+}
+
 .text-center { text-align: center; }
 .text-right { text-align: right; }

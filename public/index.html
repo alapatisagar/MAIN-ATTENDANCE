@@ -103,6 +103,12 @@
             <button type="button" class="btn-primary-excel" onclick="openModal('export-monthly-modal')">
               <i class="fa-solid fa-file-excel"></i> Export Monthly Excel
             </button>
+            <button type="button" class="btn-ghost-sm" onclick="handleDownloadBackup()" title="Download full system database backup file">
+              <i class="fa-solid fa-download text-yellow"></i> Backup DB
+            </button>
+            <button type="button" class="btn-ghost-sm" onclick="window.print()" title="Print current day attendance sheet">
+              <i class="fa-solid fa-print"></i> Print Sheet
+            </button>
             <button type="button" class="btn-ghost-sm" onclick="handleMarkAll('Holiday / Off')" title="Mark entire day as Holiday / Off">
               <i class="fa-solid fa-umbrella-beach text-blue"></i> Mark Day as Off
             </button>
