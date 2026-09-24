@@ -80,13 +80,16 @@
       <!-- Toolbar: Date Picker, Search & Quick Actions -->
       <div class="controls-card">
         <div class="controls-row">
-          <!-- Date Selector with Quick Jumper -->
+          <!-- Date Selector with Quick Jumper & Calendar -->
           <div class="control-group date-picker-group">
             <label><i class="fa-solid fa-calendar-day text-yellow"></i> Date:</label>
             <div class="date-jumper-wrap">
               <button type="button" class="btn-date-nav" onclick="changeDateByOffset(-1)" title="Previous Day"><i class="fa-solid fa-chevron-left"></i></button>
               <input type="date" id="selectedDateInput" class="form-control-date" onchange="handleDateChange()">
               <button type="button" class="btn-date-nav" onclick="changeDateByOffset(1)" title="Next Day"><i class="fa-solid fa-chevron-right"></i></button>
+              <button type="button" class="btn-date-shortcut btn-calendar-trigger" onclick="openCalendarModal()" title="Open Interactive Calendar Grid">
+                <i class="fa-solid fa-calendar-days text-yellow"></i> Calendar View
+              </button>
               <button type="button" class="btn-date-shortcut" onclick="jumpToDate('today')">Today</button>
               <button type="button" class="btn-date-shortcut" onclick="jumpToDate('yesterday')">Yesterday</button>
             </div>
@@ -397,6 +400,72 @@
       <div class="modal-footer">
         <button type="button" class="btn-primary-yellow" onclick="handleDownloadBackup()"><i class="fa-solid fa-download"></i> Download Full DB Backup</button>
         <button type="button" class="btn-ghost" onclick="closeModal('admin-tools-modal')">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================
+       MODAL 6: INTERACTIVE MONTH & DAY CALENDAR MODAL
+       ========================================================= -->
+  <div class="modal-overlay" id="calendar-picker-modal">
+    <div class="modal-card modal-calendar">
+      <div class="modal-header">
+        <h3><i class="fa-solid fa-calendar-days text-yellow"></i> Interactive Calendar Navigator</h3>
+        <button class="modal-close" onclick="closeModal('calendar-picker-modal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <!-- Calendar Header Navigation -->
+        <div class="calendar-header-nav">
+          <button type="button" class="btn-date-nav" onclick="navCalendarMonth(-1)" title="Previous Month"><i class="fa-solid fa-chevron-left"></i></button>
+          <div class="calendar-select-group">
+            <select id="calendarMonthSelect" class="form-control-select" onchange="onCalendarMonthYearChange()">
+              <option value="0">January</option>
+              <option value="1">February</option>
+              <option value="2">March</option>
+              <option value="3">April</option>
+              <option value="4">May</option>
+              <option value="5">June</option>
+              <option value="6">July</option>
+              <option value="7">August</option>
+              <option value="8">September</option>
+              <option value="9">October</option>
+              <option value="10">November</option>
+              <option value="11">December</option>
+            </select>
+            <select id="calendarYearSelect" class="form-control-select" onchange="onCalendarMonthYearChange()">
+              <option value="2024">2024</option>
+              <option value="2025">2025</option>
+              <option value="2026">2026</option>
+              <option value="2027">2027</option>
+              <option value="2028">2028</option>
+              <option value="2029">2029</option>
+              <option value="2030">2030</option>
+            </select>
+          </div>
+          <button type="button" class="btn-date-nav" onclick="navCalendarMonth(1)" title="Next Month"><i class="fa-solid fa-chevron-right"></i></button>
+        </div>
+
+        <h4 id="calendarMonthTitle" class="calendar-title-display text-center my-2">September 2026</h4>
+
+        <!-- Days of Week Header -->
+        <div class="calendar-weekdays-grid">
+          <div>Sun</div>
+          <div>Mon</div>
+          <div>Tue</div>
+          <div>Wed</div>
+          <div>Thu</div>
+          <div>Fri</div>
+          <div>Sat</div>
+        </div>
+
+        <!-- Days Grid -->
+        <div id="calendarDaysGrid" class="calendar-days-grid">
+          <!-- Rendered via JS -->
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-date-shortcut" onclick="jumpToDate('today'); closeModal('calendar-picker-modal');">Jump to Today</button>
+        <button type="button" class="btn-ghost" onclick="closeModal('calendar-picker-modal')">Close</button>
       </div>
     </div>
   </div>

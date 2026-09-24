@@ -202,10 +202,18 @@ function setFilterTab(filterName) {
   renderAttendanceTable();
 }
 
+function formatUSDate(dateStr) {
+  if (!dateStr) return '';
+  const parts = dateStr.split('-');
+  if (parts.length !== 3) return dateStr;
+  return `${parts[1]}/${parts[2]}/${parts[0]}`; // MM/DD/YYYY format
+}
+
 async function fetchAttendanceForDate() {
   const date = state.selectedDate;
 
   const dateObj = new Date(date + 'T00:00:00');
+  const usDateNum = formatUSDate(date);
   const formattedDate = dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
   const dayOfWeek = dateObj.getDay();
   const isWeekend = (dayOfWeek === 0 || dayOfWeek === 6);
@@ -213,7 +221,7 @@ async function fetchAttendanceForDate() {
 
   const dateBadge = document.getElementById('currentDateBadge');
   if (dateBadge) {
-    dateBadge.textContent = isWeekend ? `${formattedDate} (Weekend Off)` : formattedDate;
+    dateBadge.textContent = isWeekend ? `Date: ${usDateNum} (${formattedDate} - Weekend Off)` : `Date: ${usDateNum} (${formattedDate})`;
     dateBadge.className = isWeekend ? 'date-badge date-badge-weekend' : 'date-badge';
   }
 
@@ -634,4 +642,104 @@ function showToast(message, type = 'success') {
 function extractDBSNum(idStr) {
   const match = String(idStr || '').match(/\d+/);
   return match ? parseInt(match[0], 10) : 999999;
+}
+
+/* ---------------------------------------------------------
+   6. INTERACTIVE MONTH & DAY CALENDAR NAVIGATOR
+   --------------------------------------------------------- */
+const calendarState = {
+  viewYear: new Date().getFullYear(),
+  viewMonth: new Date().getMonth()
+};
+
+function openCalendarModal() {
+  if (state.selectedDate) {
+    const parts = state.selectedDate.split('-');
+    if (parts.length === 3) {
+      calendarState.viewYear = parseInt(parts[0], 10);
+      calendarState.viewMonth = parseInt(parts[1], 10) - 1;
+    }
+  }
+  openModal('calendar-picker-modal');
+  renderCalendarWidget();
+}
+
+function renderCalendarWidget() {
+  const year = calendarState.viewYear;
+  const month = calendarState.viewMonth;
+
+  const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  const titleEl = document.getElementById('calendarMonthTitle');
+  if (titleEl) titleEl.textContent = `${monthNames[month]} ${year}`;
+
+  const monthSelect = document.getElementById('calendarMonthSelect');
+  if (monthSelect) monthSelect.value = month;
+  const yearSelect = document.getElementById('calendarYearSelect');
+  if (yearSelect) yearSelect.value = year;
+
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  const gridEl = document.getElementById('calendarDaysGrid');
+  if (!gridEl) return;
+
+  let html = '';
+  for (let i = 0; i < firstDay; i++) {
+    html += `<div class="calendar-day empty"></div>`;
+  }
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    const dayOfWeek = (firstDay + day - 1) % 7;
+    const isWeekend = (dayOfWeek === 0 || dayOfWeek === 6);
+    
+    const mStr = String(month + 1).padStart(2, '0');
+    const dStr = String(day).padStart(2, '0');
+    const dateIso = `${year}-${mStr}-${dStr}`;
+
+    const isSelected = (state.selectedDate === dateIso);
+    const isToday = (new Date().toISOString().split('T')[0] === dateIso);
+
+    let classes = 'calendar-day';
+    if (isWeekend) classes += ' weekend';
+    if (isToday) classes += ' today';
+    if (isSelected) classes += ' selected';
+
+    html += `
+      <div class="${classes}" onclick="selectDateFromCalendar('${dateIso}')" title="${mStr}/${dStr}/${year} ${isWeekend ? '(Weekend Off)' : ''}">
+        <span class="day-num">${day}</span>
+        ${isWeekend ? '<span class="day-tag">Off</span>' : ''}
+      </div>
+    `;
+  }
+
+  gridEl.innerHTML = html;
+}
+
+function selectDateFromCalendar(isoDate) {
+  state.selectedDate = isoDate;
+  const dateInput = document.getElementById('selectedDateInput');
+  if (dateInput) dateInput.value = isoDate;
+  closeModal('calendar-picker-modal');
+  fetchAttendanceForDate();
+  showToast(`Loaded attendance for US Date: ${formatUSDate(isoDate)}`, 'success');
+}
+
+function navCalendarMonth(offset) {
+  calendarState.viewMonth += offset;
+  if (calendarState.viewMonth < 0) {
+    calendarState.viewMonth = 11;
+    calendarState.viewYear -= 1;
+  } else if (calendarState.viewMonth > 11) {
+    calendarState.viewMonth = 0;
+    calendarState.viewYear += 1;
+  }
+  renderCalendarWidget();
+}
+
+function onCalendarMonthYearChange() {
+  const monthSelect = document.getElementById('calendarMonthSelect');
+  const yearSelect = document.getElementById('calendarYearSelect');
+  if (monthSelect) calendarState.viewMonth = parseInt(monthSelect.value, 10);
+  if (yearSelect) calendarState.viewYear = parseInt(yearSelect.value, 10);
+  renderCalendarWidget();
 }
