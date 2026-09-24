@@ -359,6 +359,50 @@ body {
   outline: none;
 }
 
+.date-jumper-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-date-nav {
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  width: 36px;
+  height: 38px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  transition: all 0.2s;
+}
+
+.btn-date-nav:hover {
+  border-color: var(--yellow-primary);
+  color: var(--yellow-primary);
+  background: var(--bg-card-hover);
+}
+
+.btn-date-shortcut {
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  color: var(--yellow-primary);
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 700;
+  transition: all 0.2s;
+}
+
+.btn-date-shortcut:hover {
+  background: var(--yellow-primary);
+  color: #0F172A;
+}
+
 .search-group {
   position: relative;
   flex: 1;

@@ -160,6 +160,28 @@ function handleDateChange() {
   }
 }
 
+function changeDateByOffset(offsetDays) {
+  const currentDate = new Date(state.selectedDate + 'T00:00:00');
+  currentDate.setDate(currentDate.getDate() + offsetDays);
+  const newDateStr = currentDate.toISOString().split('T')[0];
+  state.selectedDate = newDateStr;
+  const dateInput = document.getElementById('selectedDateInput');
+  if (dateInput) dateInput.value = newDateStr;
+  fetchAttendanceForDate();
+}
+
+function jumpToDate(target) {
+  const d = new Date();
+  if (target === 'yesterday') {
+    d.setDate(d.getDate() - 1);
+  }
+  const dateStr = d.toISOString().split('T')[0];
+  state.selectedDate = dateStr;
+  const dateInput = document.getElementById('selectedDateInput');
+  if (dateInput) dateInput.value = dateStr;
+  fetchAttendanceForDate();
+}
+
 function handleSearchInput() {
   const searchInput = document.getElementById('searchEmployeeInput');
   if (searchInput) {
@@ -308,11 +330,16 @@ function updateStatsSummary() {
     else if (r.status === 'Holiday / Off' || r.status === 'On Leave') holidayOff++;
   });
 
+  const markedWork = present + absent + halfDay;
+  const rate = markedWork > 0 ? Math.round(((present + (halfDay * 0.5)) / markedWork) * 100) : 0;
+
   document.getElementById('statTotalEmp').textContent = total;
   document.getElementById('statPresent').textContent = present;
   document.getElementById('statAbsent').textContent = absent;
   document.getElementById('statHalfDay').textContent = halfDay;
   document.getElementById('statHolidayOff').textContent = holidayOff;
+  const rateEl = document.getElementById('statRate');
+  if (rateEl) rateEl.textContent = `${rate}%`;
 }
 
 async function handleMarkAttendance(employeeId, status) {

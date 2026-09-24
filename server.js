@@ -22,10 +22,14 @@ app.use((req, res, next) => {
 });
 
 const DATA_DIR = path.join(__dirname, 'data');
+const BACKUP_DIR = path.join(DATA_DIR, 'backups');
 const DB_FILE = path.join(DATA_DIR, 'db.json');
 
 if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
+}
+if (!fs.existsSync(BACKUP_DIR)) {
+  fs.mkdirSync(BACKUP_DIR, { recursive: true });
 }
 
 // Active Sessions Store
@@ -123,6 +127,7 @@ function getInitialData() {
       department: 'AR Callers',
       role: isAdmin ? 'System Administrator' : 'AR Caller',
       roleType: isAdmin ? 'Admin' : 'Employee',
+      isArchived: false,
       passwordHash: hashPassword(rawPass),
       avatarColor: avatarColors[index % avatarColors.length]
     };
@@ -157,6 +162,7 @@ function loadDB() {
     // Force all employees to AR Callers department
     db.employees.forEach(e => {
       e.department = 'AR Callers';
+      if (typeof e.isArchived === 'undefined') e.isArchived = false;
     });
 
     // Update Primary Admin (SAGAR ALAPATI)
@@ -165,6 +171,7 @@ function loadDB() {
       admin1.name = 'SAGAR ALAPATI';
       admin1.phone = '9704225352';
       admin1.roleType = 'Admin';
+      admin1.isArchived = false;
       if (!admin1.passwordHash) admin1.passwordHash = hashPassword('9640000890');
     } else {
       db.employees.push({
@@ -174,6 +181,7 @@ function loadDB() {
         department: 'AR Callers',
         role: 'System Administrator',
         roleType: 'Admin',
+        isArchived: false,
         passwordHash: hashPassword('9640000890'),
         avatarColor: '#DC2626'
       });
@@ -186,6 +194,7 @@ function loadDB() {
       admin2.name = 'VIJAYA SAI KRISHNA KEERTHI';
       admin2.phone = '7569258789';
       admin2.roleType = 'Admin';
+      admin2.isArchived = false;
       admin2.passwordHash = hashPassword('Admin@123');
     } else {
       db.employees.push({
@@ -195,6 +204,7 @@ function loadDB() {
         department: 'AR Callers',
         role: 'System Administrator',
         roleType: 'Admin',
+        isArchived: false,
         passwordHash: hashPassword('Admin@123'),
         avatarColor: '#F59E0B'
       });
@@ -210,11 +220,21 @@ function loadDB() {
   }
 }
 
+// Permanent Data Preservation & Daily Automated Backup
 function saveDB(data) {
   if (data && data.employees) {
     sortNumerically(data.employees);
   }
   fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), 'utf8');
+
+  // Create daily automated snapshot backup
+  try {
+    const todayStr = new Date().toISOString().split('T')[0];
+    const backupPath = path.join(BACKUP_DIR, `db_snapshot_${todayStr}.json`);
+    fs.writeFileSync(backupPath, JSON.stringify(data, null, 2), 'utf8');
+  } catch (e) {
+    // backup logging ignored
+  }
 }
 
 // ---------------------------------------------------------
@@ -300,11 +320,13 @@ app.put('/api/auth/change-password', (req, res) => {
   });
 });
 
-// 2. Get All Employees List (Sorted Numerically by DBS ID)
+// 2. Get All Active Employees List (Sorted Numerically)
 app.get('/api/employees', (req, res) => {
   const db = loadDB();
-  sortNumerically(db.employees);
-  res.json(db.employees);
+  const includeArchived = req.query.includeArchived === 'true';
+  const activeList = db.employees.filter(e => includeArchived || !e.isArchived);
+  sortNumerically(activeList);
+  res.json(activeList);
 });
 
 // 3. Add New Employee (Always AR Callers)
@@ -318,7 +340,15 @@ app.post('/api/employees', (req, res) => {
 
   const newId = (id && id.trim()) ? id.trim().toUpperCase() : `DBS-${Math.floor(1000 + Math.random() * 9000)}`;
 
-  if (db.employees.some(e => e.id.toLowerCase() === newId.toLowerCase())) {
+  const existing = db.employees.find(e => e.id.toLowerCase() === newId.toLowerCase());
+  if (existing) {
+    if (existing.isArchived) {
+      // Re-activate archived employee
+      existing.isArchived = false;
+      existing.name = name.trim();
+      saveDB(db);
+      return res.status(200).json(existing);
+    }
     return res.status(400).json({ error: `Employee ID ${newId} already exists` });
   }
 
@@ -329,6 +359,7 @@ app.post('/api/employees', (req, res) => {
     department: 'AR Callers',
     role: 'AR Caller',
     roleType: 'Employee',
+    isArchived: false,
     passwordHash: hashPassword(newId),
     avatarColor: avatarColors[Math.floor(Math.random() * avatarColors.length)]
   };
@@ -340,7 +371,7 @@ app.post('/api/employees', (req, res) => {
   res.status(201).json(newEmp);
 });
 
-// 4. Delete Employee
+// 4. Soft Delete Employee (Preserves All Historical Logs & Monthly Export Data Forever)
 app.delete('/api/employees/:id', (req, res) => {
   const db = loadDB();
   const { id } = req.params;
@@ -349,18 +380,23 @@ app.delete('/api/employees/:id', (req, res) => {
     return res.status(400).json({ error: 'Cannot delete primary Admin accounts' });
   }
 
-  const index = db.employees.findIndex(e => e.id === id);
-  if (index === -1) {
+  const emp = db.employees.find(e => e.id === id);
+  if (!emp) {
     return res.status(404).json({ error: 'Employee not found' });
   }
 
-  const deleted = db.employees.splice(index, 1)[0];
+  // Soft delete / archive to ensure historical logs are 100% saved forever!
+  emp.isArchived = true;
+  emp.archivedAt = new Date().toISOString();
   saveDB(db);
 
-  res.json({ success: true, deleted });
+  res.json({
+    success: true,
+    message: `Employee ${emp.name} archived safely. All historical attendance logs preserved.`
+  });
 });
 
-// 5. Get Attendance Records for a Specific Date (Sorted Numerically)
+// 5. Get Attendance Records for a Specific Date
 app.get('/api/attendance', (req, res) => {
   const db = loadDB();
   const targetDate = req.query.date || new Date().toISOString().split('T')[0];
@@ -369,9 +405,11 @@ app.get('/api/attendance', (req, res) => {
   const dayOfWeek = dateObj.getDay();
   const isWeekend = (dayOfWeek === 0 || dayOfWeek === 6);
 
-  sortNumerically(db.employees);
+  // Return non-archived employees, or employees who have attendance recorded for targetDate
+  const targetEmps = db.employees.filter(e => !e.isArchived || (db.attendance || []).some(a => a.employeeId === e.id && a.date === targetDate));
+  sortNumerically(targetEmps);
 
-  const records = db.employees.map(emp => {
+  const records = targetEmps.map(emp => {
     const att = (db.attendance || []).find(a => a.employeeId === emp.id && a.date === targetDate);
     
     let status = att ? att.status : (isWeekend ? 'Holiday / Off' : 'Unmarked');
@@ -452,7 +490,8 @@ app.post('/api/attendance/mark-all', (req, res) => {
 
   if (!db.attendance) db.attendance = [];
 
-  db.employees.forEach(emp => {
+  const activeEmps = db.employees.filter(e => !e.isArchived);
+  activeEmps.forEach(emp => {
     const index = db.attendance.findIndex(a => a.employeeId === emp.id && a.date === date);
     if (index >= 0) {
       db.attendance[index].status = status;
@@ -490,7 +529,8 @@ app.post('/api/attendance/auto-present-remaining', (req, res) => {
   if (!db.attendance) db.attendance = [];
 
   let count = 0;
-  db.employees.forEach(emp => {
+  const activeEmps = db.employees.filter(e => !e.isArchived);
+  activeEmps.forEach(emp => {
     const existing = db.attendance.find(a => a.employeeId === emp.id && a.date === date);
     if (!existing || existing.status === 'Unmarked') {
       if (existing) {
@@ -520,7 +560,7 @@ app.post('/api/attendance/auto-present-remaining', (req, res) => {
   });
 });
 
-// 8. Export Monthly Attendance Excel / CSV Report (Sorted Numerically by DBS ID)
+// 8. Export Monthly Attendance Excel / CSV Report (Includes Attendance Rate %)
 app.get('/api/export/monthly-excel', (req, res) => {
   const db = loadDB();
   const monthQuery = req.query.month || new Date().toISOString().substring(0, 7);
@@ -528,9 +568,11 @@ app.get('/api/export/monthly-excel', (req, res) => {
   const attendanceList = db.attendance || [];
   const monthRecords = attendanceList.filter(a => a.date && a.date.startsWith(monthQuery));
 
-  sortNumerically(db.employees);
+  // Include active and archived employees who have records for this month
+  const targetEmps = db.employees.filter(e => !e.isArchived || monthRecords.some(r => r.employeeId === e.id));
+  sortNumerically(targetEmps);
 
-  const summary = db.employees.map(emp => {
+  const summary = targetEmps.map(emp => {
     const empRecords = monthRecords.filter(a => a.employeeId === emp.id);
 
     let presentCount = 0;
@@ -546,6 +588,17 @@ app.get('/api/export/monthly-excel', (req, res) => {
     });
 
     const totalDaysRecorded = empRecords.length;
+    // Calculate Attendance Percentage Rate (%)
+    let attPercentage = '0.0%';
+    if (totalDaysRecorded > 0) {
+      const workingDays = totalDaysRecorded - holidayOffCount;
+      if (workingDays > 0) {
+        const score = (presentCount + (halfDayCount * 0.5)) / workingDays * 100;
+        attPercentage = `${score.toFixed(1)}%`;
+      } else {
+        attPercentage = '100.0%';
+      }
+    }
 
     return {
       id: emp.id,
@@ -555,18 +608,20 @@ app.get('/api/export/monthly-excel', (req, res) => {
       absent: absentCount,
       halfDay: halfDayCount,
       holidayOff: holidayOffCount,
-      totalRecorded: totalDaysRecorded
+      totalRecorded: totalDaysRecorded,
+      attPercentage
     };
   });
 
   let csv = '\uFEFF';
   csv += `AR Callers Monthly Attendance Summary - Month: ${monthQuery}\n`;
-  csv += `Generated On: ${new Date().toLocaleString('en-US')}\n\n`;
-  csv += `DBS ID,Employee Name,Department,Days Present,Days Absent,Half Days,Holiday / Off Days,Total Days Recorded\n`;
+  csv += `Generated On: ${new Date().toLocaleString('en-US')}\n`;
+  csv += `Data Storage Policy: Permanent Preservation & Soft Delete Backup Active\n\n`;
+  csv += `DBS ID,Employee Name,Department,Days Present,Days Absent,Half Days,Holiday / Off Days,Total Days Recorded,Attendance Rate (%)\n`;
 
   summary.forEach(row => {
     const cleanName = `"${row.name.replace(/"/g, '""')}"`;
-    csv += `${row.id},${cleanName},"AR Callers",${row.present},${row.absent},${row.halfDay},${row.holidayOff},${row.totalRecorded}\n`;
+    csv += `${row.id},${cleanName},"AR Callers",${row.present},${row.absent},${row.halfDay},${row.holidayOff},${row.totalRecorded},${row.attPercentage}\n`;
   });
 
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
@@ -577,7 +632,7 @@ app.get('/api/export/monthly-excel', (req, res) => {
 app.listen(PORT, () => {
   console.log(`====================================================`);
   console.log(`🚀 AR Callers Attendance Portal running on port ${PORT}`);
-  console.log(`🔢 Roster Sorted Numerically by DBS ID`);
+  console.log(`🛡️ Data Storage Policy: Permanent Preservation & Daily Snapshot Backups`);
   console.log(`👤 Primary Admin: SAGAR ALAPATI (9704225352 / 9640000890)`);
   console.log(`👤 Co-Admin: VIJAYA SAI KRISHNA KEERTHI (7569258789 / Admin@123)`);
   console.log(`====================================================`);

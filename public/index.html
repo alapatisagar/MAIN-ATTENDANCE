@@ -77,10 +77,16 @@
       <!-- Toolbar: Date Picker, Search & Quick Actions -->
       <div class="controls-card">
         <div class="controls-row">
-          <!-- Date Selector -->
+          <!-- Date Selector with Quick Jumper -->
           <div class="control-group date-picker-group">
-            <label><i class="fa-solid fa-calendar-day text-yellow"></i> Attendance Date:</label>
-            <input type="date" id="selectedDateInput" class="form-control-date" onchange="handleDateChange()">
+            <label><i class="fa-solid fa-calendar-day text-yellow"></i> Date:</label>
+            <div class="date-jumper-wrap">
+              <button type="button" class="btn-date-nav" onclick="changeDateByOffset(-1)" title="Previous Day"><i class="fa-solid fa-chevron-left"></i></button>
+              <input type="date" id="selectedDateInput" class="form-control-date" onchange="handleDateChange()">
+              <button type="button" class="btn-date-nav" onclick="changeDateByOffset(1)" title="Next Day"><i class="fa-solid fa-chevron-right"></i></button>
+              <button type="button" class="btn-date-shortcut" onclick="jumpToDate('today')">Today</button>
+              <button type="button" class="btn-date-shortcut" onclick="jumpToDate('yesterday')">Yesterday</button>
+            </div>
           </div>
 
           <!-- Search Filter -->
@@ -146,6 +152,14 @@
           <div class="stat-details">
             <span class="stat-value" id="statHolidayOff">0</span>
             <span class="stat-label">Holiday / Off</span>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-icon icon-yellow"><i class="fa-solid fa-chart-line"></i></div>
+          <div class="stat-details">
+            <span class="stat-value" id="statRate">0%</span>
+            <span class="stat-label">Attendance Rate</span>
           </div>
         </div>
       </div>
