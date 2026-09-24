@@ -363,6 +363,48 @@ app.post('/api/attendance/mark-all', (req, res) => {
   });
 });
 
+// 7b. Auto-Mark Remaining Unmarked Employees as Present for a Date
+app.post('/api/attendance/auto-present-remaining', (req, res) => {
+  const db = loadDB();
+  const { date } = req.body;
+
+  if (!date) {
+    return res.status(400).json({ error: 'Date is required' });
+  }
+
+  if (!db.attendance) db.attendance = [];
+
+  let count = 0;
+  db.employees.forEach(emp => {
+    const existing = db.attendance.find(a => a.employeeId === emp.id && a.date === date);
+    if (!existing || existing.status === 'Unmarked') {
+      if (existing) {
+        existing.status = 'Present';
+        existing.updatedAt = new Date().toISOString();
+      } else {
+        db.attendance.push({
+          id: `ATT-${Date.now()}-${Math.floor(Math.random()*1000)}`,
+          employeeId: emp.id,
+          employeeName: emp.name,
+          department: emp.department,
+          date,
+          status: 'Present',
+          updatedAt: new Date().toISOString()
+        });
+      }
+      count++;
+    }
+  });
+
+  saveDB(db);
+
+  res.json({
+    success: true,
+    message: `Auto-marked ${count} remaining employees as Present for ${date}`,
+    count
+  });
+});
+
 // 8. Export Monthly Attendance Excel / CSV Report
 app.get('/api/export/monthly-excel', (req, res) => {
   const db = loadDB();

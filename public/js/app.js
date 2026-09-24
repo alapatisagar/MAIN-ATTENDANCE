@@ -270,9 +270,55 @@ async function handleMarkAttendance(employeeId, status) {
     }
 
     showToast(`Marked ${status} for ${rec ? rec.name : employeeId}`, 'success');
+
+    // Automatically auto-mark all remaining unmarked employees as Present if marking Absent/HalfDay/Leave
+    if (status === 'Absent' || status === 'Half Day' || status === 'On Leave') {
+      const hasUnmarked = state.records.some(r => r.status === 'Unmarked');
+      if (hasUnmarked) {
+        autoMarkUnmarkedPresent(date);
+      }
+    }
   } catch (err) {
     showToast('Network error marking attendance', 'error');
     fetchAttendanceForDate();
+  }
+}
+
+// Helper to auto-mark all remaining unmarked employees as Present
+async function autoMarkUnmarkedPresent(date) {
+  try {
+    const res = await fetch(`${API_BASE}/attendance/auto-present-remaining`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date })
+    });
+    if (res.ok) {
+      fetchAttendanceForDate();
+    }
+  } catch (err) {
+    // silent fallback
+  }
+}
+
+async function handleAutoPresentRemaining() {
+  const date = state.selectedDate;
+  try {
+    const res = await fetch(`${API_BASE}/attendance/auto-present-remaining`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date })
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      showToast('Auto-mark failed', 'error');
+      return;
+    }
+
+    showToast(data.message || `Auto-marked remaining as Present`, 'success');
+    fetchAttendanceForDate();
+  } catch (err) {
+    showToast('Error auto-marking remaining', 'error');
   }
 }
 
