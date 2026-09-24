@@ -4,6 +4,7 @@ const bodyParser = require('body-parser');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const ExcelJS = require('exceljs');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -602,10 +603,25 @@ app.post('/api/attendance/auto-present-remaining', (req, res) => {
   });
 });
 
-// 8. Export Monthly Attendance Excel / CSV Report (Includes Attendance Rate %)
-app.get('/api/export/monthly-excel', (req, res) => {
+// Helper Function to Build Colorful Monthly Excel Spreadsheet (.xlsx) Matching Reference Screenshot
+async function buildMonthlyExcelBuffer(monthQuery) {
   const db = loadDB();
-  const monthQuery = req.query.month || new Date().toISOString().substring(0, 7);
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'AR Callers Attendance System';
+  workbook.created = new Date();
+
+  const parts = monthQuery.split('-');
+  const year = parseInt(parts[0], 10);
+  const monthIdx = parseInt(parts[1], 10) - 1;
+
+  const monthNames = [
+    'January', 'February', 'March', 'April', 'May', 'June', 
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+  const monthName = monthNames[monthIdx] || 'Month';
+
+  const worksheet = workbook.addWorksheet(`${monthName} ${year}`);
+  const totalDaysInMonth = new Date(year, monthIdx + 1, 0).getDate();
 
   const attendanceList = db.attendance || [];
   const monthRecords = attendanceList.filter(a => a.date && a.date.startsWith(monthQuery));
@@ -614,7 +630,188 @@ app.get('/api/export/monthly-excel', (req, res) => {
   const targetEmps = db.employees.filter(e => !e.isArchived || monthRecords.some(r => r.employeeId === e.id));
   sortNumerically(targetEmps);
 
-  const summary = targetEmps.map(emp => {
+  // ---------------------------------------------------------
+  // TABLE 1: DAILY MONTHLY ATTENDANCE GRID (TOP TABLE)
+  // ---------------------------------------------------------
+  const headerRowValues = ['EMPLOYEE NAME'];
+  const weekdayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  for (let d = 1; d <= totalDaysInMonth; d++) {
+    const dateObj = new Date(year, monthIdx, d);
+    const dayOfWeek = dateObj.getDay();
+    headerRowValues.push(`${d} (${weekdayNames[dayOfWeek]})`);
+  }
+
+  const row1 = worksheet.addRow(headerRowValues);
+  row1.height = 28;
+
+  // Style Header Row 1 (Cyan/Blue Background #00A4E4, Bold White Text)
+  row1.eachCell((cell) => {
+    cell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FF00A4E4' } // Bright Cyan Blue Fill
+    };
+    cell.alignment = { vertical: 'middle', horizontal: 'center' };
+    cell.border = {
+      top: { style: 'thin', color: { argb: 'FF007090' } },
+      left: { style: 'thin', color: { argb: 'FF007090' } },
+      bottom: { style: 'medium', color: { argb: 'FF007090' } },
+      right: { style: 'thin', color: { argb: 'FF007090' } }
+    };
+  });
+  row1.getCell(1).alignment = { vertical: 'middle', horizontal: 'left' };
+
+  worksheet.getColumn(1).width = 32;
+  for (let c = 2; c <= totalDaysInMonth + 1; c++) {
+    worksheet.getColumn(c).width = 9;
+  }
+
+  // Populate Employee Rows for Table 1
+  targetEmps.forEach(emp => {
+    const rowValues = [emp.name.toUpperCase()];
+
+    for (let d = 1; d <= totalDaysInMonth; d++) {
+      const dStr = String(d).padStart(2, '0');
+      const mStr = String(monthIdx + 1).padStart(2, '0');
+      const dateIso = `${year}-${mStr}-${dStr}`;
+
+      const dateObj = new Date(year, monthIdx, d);
+      const dayOfWeek = dateObj.getDay();
+      const isWeekend = (dayOfWeek === 0 || dayOfWeek === 6);
+
+      const record = monthRecords.find(r => r.employeeId === emp.id && r.date === dateIso);
+      let status = record ? record.status : (isWeekend ? 'Holiday / Off' : 'Unmarked');
+
+      let cellText = 'P';
+      if (status === 'Present') cellText = 'P';
+      else if (status === 'Absent') cellText = 'A';
+      else if (status === 'Half Day') cellText = '0.5P';
+      else if (status === 'Holiday / Off' || status === 'On Leave') cellText = 'OFF';
+      else cellText = 'P';
+
+      rowValues.push(cellText);
+    }
+
+    const row = worksheet.addRow(rowValues);
+    row.height = 22;
+
+    // Style Employee Name Column A (Bright Yellow Background #FFFFEA00, Bold Text)
+    const nameCell = row.getCell(1);
+    nameCell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FF000000' } };
+    nameCell.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFFFEA00' } // Yellow Fill
+    };
+    nameCell.alignment = { vertical: 'middle', horizontal: 'left' };
+    nameCell.border = {
+      top: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+      left: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+      bottom: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+      right: { style: 'thin', color: { argb: 'FFCCCCCC' } }
+    };
+
+    // Style Day Status Cells (B through End)
+    for (let d = 1; d <= totalDaysInMonth; d++) {
+      const cell = row.getCell(d + 1);
+      const val = cell.value;
+
+      cell.alignment = { vertical: 'middle', horizontal: 'center' };
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+        left: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+        bottom: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+        right: { style: 'thin', color: { argb: 'FFCCCCCC' } }
+      };
+
+      if (val === 'A' || val === 'OFF' || val === '0.5P') {
+        // Red background fill for Absent, OFF, 0.5P (Matching Screenshot!)
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FFFF0000' } // Red Fill
+        };
+        cell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+      } else {
+        // White/Light background for Present 'P'
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FFFFFFFF' }
+        };
+        cell.font = { name: 'Calibri', size: 10, bold: false, color: { argb: 'FF000000' } };
+      }
+    }
+  });
+
+  // Add blank rows before Summary Table
+  worksheet.addRow([]);
+  worksheet.addRow([]);
+
+  // ---------------------------------------------------------
+  // TABLE 2: SEPARATE MONTHLY SUMMARY TABLE BELOW CALLERS LIST
+  // ---------------------------------------------------------
+
+  // Summary Banner Header Row
+  const bannerRow = worksheet.addRow([`EMPLOYEE ATTENDANCE SUMMARY - ${monthName.toUpperCase()} ${year}`]);
+  bannerRow.height = 30;
+  const bannerCell = bannerRow.getCell(1);
+  bannerCell.font = { name: 'Calibri', size: 13, bold: true, color: { argb: 'FFFFFFFF' } };
+  bannerCell.fill = {
+    type: 'pattern',
+    pattern: 'solid',
+    fgColor: { argb: 'FF003366' } // Dark Navy Fill
+  };
+  bannerCell.alignment = { vertical: 'middle', horizontal: 'left' };
+
+  // Summary Table Column Headers
+  const summaryHeaderRow = worksheet.addRow([
+    'DBS ID',
+    'EMPLOYEE NAME',
+    'DAYS PRESENT',
+    'DAYS ABSENT',
+    'HALF DAYS',
+    'HOLIDAY / OFF DAYS',
+    'TOTAL DAYS RECORDED',
+    'ATTENDANCE RATE (%)'
+  ]);
+  summaryHeaderRow.height = 26;
+
+  const headerColors = [
+    'FF00A4E4', // DBS ID (Cyan)
+    'FFFFEA00', // Employee Name (Yellow)
+    'FF10B981', // Days Present (Green)
+    'FFEF4444', // Days Absent (Red)
+    'FFA855F7', // Half Days (Purple)
+    'FF0EA5E9', // Off Days (Blue)
+    'FF4B5563', // Total Recorded (Gray)
+    'FFF59E0B'  // Attendance Rate % (Gold/Yellow)
+  ];
+
+  summaryHeaderRow.eachCell((cell, colNum) => {
+    const bgColor = headerColors[colNum - 1] || 'FF00A4E4';
+    const isDark = (bgColor !== 'FFFFEA00');
+
+    cell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: isDark ? 'FFFFFFFF' : 'FF000000' } };
+    cell.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: bgColor }
+    };
+    cell.alignment = { vertical: 'middle', horizontal: 'center' };
+    cell.border = {
+      top: { style: 'thin', color: { argb: 'FF333333' } },
+      left: { style: 'thin', color: { argb: 'FF333333' } },
+      bottom: { style: 'medium', color: { argb: 'FF333333' } },
+      right: { style: 'thin', color: { argb: 'FF333333' } }
+    };
+  });
+  summaryHeaderRow.getCell(2).alignment = { vertical: 'middle', horizontal: 'left' };
+
+  // Populate Summary Table Data Rows
+  targetEmps.forEach(emp => {
     const empRecords = monthRecords.filter(a => a.employeeId === emp.id);
 
     let presentCount = 0;
@@ -630,7 +827,6 @@ app.get('/api/export/monthly-excel', (req, res) => {
     });
 
     const totalDaysRecorded = empRecords.length;
-    // Calculate Attendance Percentage Rate (%)
     let attPercentage = '0.0%';
     if (totalDaysRecorded > 0) {
       const workingDays = totalDaysRecorded - holidayOffCount;
@@ -642,33 +838,54 @@ app.get('/api/export/monthly-excel', (req, res) => {
       }
     }
 
-    return {
-      id: emp.id,
-      name: emp.name,
-      department: 'AR Callers',
-      present: presentCount,
-      absent: absentCount,
-      halfDay: halfDayCount,
-      holidayOff: holidayOffCount,
-      totalRecorded: totalDaysRecorded,
+    const sRow = worksheet.addRow([
+      emp.id,
+      emp.name.toUpperCase(),
+      presentCount,
+      absentCount,
+      halfDayCount,
+      holidayOffCount,
+      totalDaysRecorded,
       attPercentage
-    };
+    ]);
+    sRow.height = 22;
+
+    sRow.eachCell((cell, colNum) => {
+      cell.alignment = { vertical: 'middle', horizontal: colNum === 2 ? 'left' : 'center' };
+      cell.font = { name: 'Calibri', size: 10, bold: (colNum === 1 || colNum === 2 || colNum === 8) };
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+        left: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+        bottom: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+        right: { style: 'thin', color: { argb: 'FFCCCCCC' } }
+      };
+
+      if (colNum === 2) {
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FFFFEA00' }
+        };
+      }
+    });
   });
 
-  let csv = '\uFEFF';
-  csv += `AR Callers Monthly Attendance Summary - Month: ${monthQuery}\n`;
-  csv += `Generated On: ${new Date().toLocaleString('en-US')}\n`;
-  csv += `Data Storage Policy: Permanent Preservation & Soft Delete Backup Active\n\n`;
-  csv += `DBS ID,Employee Name,Department,Days Present,Days Absent,Half Days,Holiday / Off Days,Total Days Recorded,Attendance Rate (%)\n`;
+  return await workbook.xlsx.writeBuffer();
+}
 
-  summary.forEach(row => {
-    const cleanName = `"${row.name.replace(/"/g, '""')}"`;
-    csv += `${row.id},${cleanName},"AR Callers",${row.present},${row.absent},${row.halfDay},${row.holidayOff},${row.totalRecorded},${row.attPercentage}\n`;
-  });
+// 8. Export Monthly Attendance Colorful Excel Report (.xlsx)
+app.get('/api/export/monthly-excel', async (req, res) => {
+  try {
+    const monthQuery = req.query.month || new Date().toISOString().substring(0, 7);
+    const buffer = await buildMonthlyExcelBuffer(monthQuery);
 
-  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-  res.setHeader('Content-Disposition', `attachment; filename=AR_Callers_Monthly_Attendance_${monthQuery}.csv`);
-  res.send(csv);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename=AR_Callers_Monthly_Attendance_${monthQuery}.xlsx`);
+    res.send(buffer);
+  } catch (err) {
+    console.error('Excel Export Error:', err);
+    res.status(500).json({ error: 'Failed to generate Excel report' });
+  }
 });
 
 // 9. Get Monthly Attendance Summary JSON (For UI preview & analytics)
