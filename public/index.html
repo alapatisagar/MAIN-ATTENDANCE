@@ -63,6 +63,9 @@
           <span class="user-name" id="headerUserName">Admin User</span>
           <span class="badge badge-yellow">Admin</span>
         </div>
+        <button class="btn-header-action" onclick="openAdminToolsModal()" title="System Health & Operational Status">
+          <i class="fa-solid fa-sliders"></i> <span class="hide-mobile">Admin Tools</span>
+        </button>
         <button class="btn-header-action" onclick="openModal('change-password-modal')" title="Change Password">
           <i class="fa-solid fa-key"></i> <span class="hide-mobile">Password</span>
         </button>
@@ -102,6 +105,9 @@
             </button>
             <button type="button" class="btn-primary-excel" onclick="openModal('export-monthly-modal')">
               <i class="fa-solid fa-file-excel"></i> Export Monthly Excel
+            </button>
+            <button type="button" class="btn-ghost-sm" onclick="openMonthlySummaryModal()" title="View monthly summary table on screen">
+              <i class="fa-solid fa-table text-yellow"></i> Monthly Report Preview
             </button>
             <button type="button" class="btn-ghost-sm" onclick="handleDownloadBackup()" title="Download full system database backup file">
               <i class="fa-solid fa-download text-yellow"></i> Backup DB
@@ -303,6 +309,95 @@
           <button type="submit" class="btn-primary-yellow"><i class="fa-solid fa-check"></i> Update Password</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- =========================================================
+       MODAL 4: MONTHLY SUMMARY REPORT PREVIEW MODAL
+       ========================================================= -->
+  <div class="modal-overlay" id="monthly-summary-modal">
+    <div class="modal-card modal-lg">
+      <div class="modal-header">
+        <h3><i class="fa-solid fa-chart-column text-yellow"></i> Monthly Attendance Preview</h3>
+        <button class="modal-close" onclick="closeModal('monthly-summary-modal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="controls-row mb-3">
+          <div class="control-group">
+            <label><i class="fa-solid fa-calendar text-yellow"></i> Select Month:</label>
+            <input type="month" id="summaryMonthInput" class="form-control-date" onchange="fetchMonthlySummaryData()">
+          </div>
+          <button class="btn-primary-excel" onclick="triggerDownloadFromSummary()">
+            <i class="fa-solid fa-file-excel"></i> Download Excel Report
+          </button>
+        </div>
+
+        <div class="table-responsive modal-table-wrap">
+          <table class="attendance-table">
+            <thead>
+              <tr>
+                <th>DBS ID</th>
+                <th>Employee Name</th>
+                <th class="text-center">Present</th>
+                <th class="text-center">Absent</th>
+                <th class="text-center">Half Day</th>
+                <th class="text-center">Off</th>
+                <th class="text-center">Attendance Rate</th>
+              </tr>
+            </thead>
+            <tbody id="monthlySummaryTableBody">
+              <!-- Rendered via JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-ghost" onclick="closeModal('monthly-summary-modal')">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================
+       MODAL 5: ADMIN SYSTEM TOOLS & HEALTH MODAL
+       ========================================================= -->
+  <div class="modal-overlay" id="admin-tools-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3><i class="fa-solid fa-sliders text-yellow"></i> System Health & Admin Control</h3>
+        <button class="modal-close" onclick="closeModal('admin-tools-modal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="system-health-box">
+          <div class="health-item">
+            <span class="health-label"><i class="fa-solid fa-shield-halved text-green"></i> Storage Policy:</span>
+            <span class="health-val text-green">Permanent Preservation & Soft Delete Active</span>
+          </div>
+          <div class="health-item">
+            <span class="health-label"><i class="fa-solid fa-database text-yellow"></i> Database Status:</span>
+            <span class="health-val" id="sysStatusText">Loading...</span>
+          </div>
+          <div class="health-item">
+            <span class="health-label"><i class="fa-solid fa-users text-blue"></i> Active AR Callers:</span>
+            <span class="health-val" id="sysActiveEmp">0</span>
+          </div>
+          <div class="health-item">
+            <span class="health-label"><i class="fa-solid fa-clock-rotate-left text-purple"></i> Total Attendance Records:</span>
+            <span class="health-val" id="sysTotalRecords">0</span>
+          </div>
+        </div>
+
+        <div class="admin-list-card mt-3">
+          <h4><i class="fa-solid fa-user-shield text-yellow"></i> Designated Administrators</h4>
+          <ul class="admin-list">
+            <li><strong>SAGAR ALAPATI</strong> (Primary Admin) &mdash; <code>9704225352</code></li>
+            <li><strong>VIJAYA SAI KRISHNA KEERTHI</strong> (Co-Admin) &mdash; <code>7569258789</code></li>
+          </ul>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-primary-yellow" onclick="handleDownloadBackup()"><i class="fa-solid fa-download"></i> Download Full DB Backup</button>
+        <button type="button" class="btn-ghost" onclick="closeModal('admin-tools-modal')">Close</button>
+      </div>
     </div>
   </div>
 

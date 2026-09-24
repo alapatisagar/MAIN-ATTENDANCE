@@ -814,6 +814,65 @@ body {
   box-shadow: var(--shadow-card);
 }
 
+.modal-card.modal-lg {
+  max-width: 880px;
+}
+
+.system-health-box {
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.health-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.9rem;
+}
+
+.health-label {
+  font-weight: 600;
+  color: var(--text-main);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.health-val {
+  font-weight: 700;
+}
+
+.admin-list-card {
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 16px;
+}
+
+.admin-list-card h4 {
+  font-size: 0.9rem;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+.admin-list {
+  list-style: none;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.admin-list code {
+  color: var(--yellow-primary);
+}
+
 .modal-header {
   padding: 20px 24px;
   border-bottom: 1px solid var(--border-color);

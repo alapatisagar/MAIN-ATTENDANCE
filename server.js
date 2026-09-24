@@ -671,6 +671,83 @@ app.get('/api/export/monthly-excel', (req, res) => {
   res.send(csv);
 });
 
+// 9. Get Monthly Attendance Summary JSON (For UI preview & analytics)
+app.get('/api/admin/monthly-summary', (req, res) => {
+  const db = loadDB();
+  const monthQuery = req.query.month || new Date().toISOString().substring(0, 7);
+
+  const attendanceList = db.attendance || [];
+  const monthRecords = attendanceList.filter(a => a.date && a.date.startsWith(monthQuery));
+  const targetEmps = db.employees.filter(e => !e.isArchived || monthRecords.some(r => r.employeeId === e.id));
+  sortNumerically(targetEmps);
+
+  const summary = targetEmps.map(emp => {
+    const empRecords = monthRecords.filter(a => a.employeeId === emp.id);
+    let present = 0, absent = 0, halfDay = 0, holidayOff = 0;
+
+    empRecords.forEach(r => {
+      if (r.status === 'Present') present++;
+      else if (r.status === 'Absent') absent++;
+      else if (r.status === 'Half Day') halfDay++;
+      else if (r.status === 'Holiday / Off' || r.status === 'On Leave') holidayOff++;
+    });
+
+    const total = empRecords.length;
+    let rate = '0.0%';
+    if (total > 0) {
+      const working = total - holidayOff;
+      if (working > 0) {
+        rate = `${((present + (halfDay * 0.5)) / working * 100).toFixed(1)}%`;
+      } else {
+        rate = '100.0%';
+      }
+    }
+
+    return {
+      id: emp.id,
+      name: emp.name,
+      present,
+      absent,
+      halfDay,
+      holidayOff,
+      total,
+      rate
+    };
+  });
+
+  res.json({
+    month: monthQuery,
+    totalEmployees: targetEmps.length,
+    summary
+  });
+});
+
+// 10. System Health & Operational Status Dashboard API
+app.get('/api/admin/system-status', (req, res) => {
+  const db = loadDB();
+  let backupFiles = [];
+  try {
+    if (fs.existsSync(BACKUP_DIR)) {
+      backupFiles = fs.readdirSync(BACKUP_DIR).filter(f => f.endsWith('.json'));
+    }
+  } catch (err) {}
+
+  res.json({
+    status: 'Healthy',
+    storagePolicy: 'Permanent Preservation & Soft Delete Active',
+    totalEmployees: db.employees.length,
+    activeEmployees: db.employees.filter(e => !e.isArchived).length,
+    archivedEmployees: db.employees.filter(e => e.isArchived).length,
+    totalAttendanceRecords: (db.attendance || []).length,
+    backupCount: backupFiles.length,
+    backupFiles: backupFiles.slice(-5),
+    admins: [
+      { name: 'SAGAR ALAPATI', role: 'Primary Admin', phone: '9704225352', id: 'DBS-540' },
+      { name: 'VIJAYA SAI KRISHNA KEERTHI', role: 'Co-Admin', phone: '7569258789', id: 'DBS-327' }
+    ]
+  });
+});
+
 app.listen(PORT, () => {
   console.log(`====================================================`);
   console.log(`🚀 AR Callers Attendance Portal running on port ${PORT}`);

@@ -28,21 +28,22 @@ function initApp() {
   const monthInput = document.getElementById('exportMonthInput');
   if (monthInput) monthInput.value = currentMonth;
 
-  const savedUser = localStorage.getItem('arcallers_user');
-  const savedToken = localStorage.getItem('arcallers_token');
+  // Clear session so page refresh ALWAYS forces login page
+  state.currentUser = null;
+  state.token = null;
+  localStorage.removeItem('arcallers_user');
+  localStorage.removeItem('arcallers_token');
 
-  if (savedUser && savedToken) {
-    state.currentUser = JSON.parse(savedUser);
-    state.token = savedToken;
-    showAppScreen();
-  } else {
-    showWelcomeScreen();
-  }
+  showWelcomeScreen();
 }
 
 function showWelcomeScreen() {
   document.getElementById('welcomeScreen').style.display = 'flex';
   document.getElementById('appScreen').style.display = 'none';
+
+  // Reset login form inputs on welcome screen display
+  const loginForm = document.getElementById('welcomeLoginForm');
+  if (loginForm) loginForm.reset();
 }
 
 function showAppScreen() {
@@ -88,8 +89,9 @@ async function handleAdminLogin(e) {
 
     state.currentUser = data.user;
     state.token = data.token;
-    localStorage.setItem('arcallers_user', JSON.stringify(data.user));
-    localStorage.setItem('arcallers_token', data.token);
+    // Do not save to localStorage so refresh ALWAYS requires login again!
+    localStorage.removeItem('arcallers_user');
+    localStorage.removeItem('arcallers_token');
 
     showToast(`Welcome ${data.user.name}! Logged in as Admin.`, 'success');
     showAppScreen();
@@ -514,6 +516,72 @@ function handleExportMonthly(e) {
 function handleDownloadBackup() {
   showToast('Downloading full database backup JSON...', 'success');
   window.location.href = `${API_BASE}/admin/backup-download`;
+}
+
+async function openMonthlySummaryModal() {
+  const monthInput = document.getElementById('summaryMonthInput');
+  const currentMonth = new Date().toISOString().substring(0, 7);
+  if (monthInput) monthInput.value = currentMonth;
+  openModal('monthly-summary-modal');
+  await fetchMonthlySummaryData();
+}
+
+async function fetchMonthlySummaryData() {
+  const monthInput = document.getElementById('summaryMonthInput');
+  const monthVal = monthInput ? monthInput.value : new Date().toISOString().substring(0, 7);
+  const tbody = document.getElementById('monthlySummaryTableBody');
+  if (!tbody) return;
+
+  tbody.innerHTML = `<tr><td colspan="7" class="text-center">Loading monthly summary...</td></tr>`;
+
+  try {
+    const res = await fetch(`${API_BASE}/admin/monthly-summary?month=${monthVal}`);
+    if (!res.ok) {
+      tbody.innerHTML = `<tr><td colspan="7" class="text-center text-red">Failed to load summary</td></tr>`;
+      return;
+    }
+
+    const data = await res.json();
+    if (!data.summary || data.summary.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted">No attendance data for month ${monthVal}</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = data.summary.map(item => `
+      <tr>
+        <td><strong>${escapeHTML(item.id)}</strong></td>
+        <td>${escapeHTML(item.name)}</td>
+        <td class="text-center text-green"><strong>${item.present}</strong></td>
+        <td class="text-center text-red"><strong>${item.absent}</strong></td>
+        <td class="text-center text-purple"><strong>${item.halfDay}</strong></td>
+        <td class="text-center text-blue"><strong>${item.holidayOff}</strong></td>
+        <td class="text-center text-yellow"><strong>${item.rate}</strong></td>
+      </tr>
+    `).join('');
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="7" class="text-center text-red">Error loading monthly summary</td></tr>`;
+  }
+}
+
+function triggerDownloadFromSummary() {
+  const monthInput = document.getElementById('summaryMonthInput');
+  const monthVal = monthInput ? monthInput.value : new Date().toISOString().substring(0, 7);
+  window.location.href = `${API_BASE}/export/monthly-excel?month=${monthVal}`;
+}
+
+async function openAdminToolsModal() {
+  openModal('admin-tools-modal');
+  try {
+    const res = await fetch(`${API_BASE}/admin/system-status`);
+    if (res.ok) {
+      const data = await res.json();
+      document.getElementById('sysStatusText').textContent = `${data.status} (Storage: Soft Delete & Backup Active)`;
+      document.getElementById('sysActiveEmp').textContent = `${data.activeEmployees} active (${data.archivedEmployees} archived)`;
+      document.getElementById('sysTotalRecords').textContent = data.totalAttendanceRecords;
+    }
+  } catch (err) {
+    document.getElementById('sysStatusText').textContent = 'Healthy';
+  }
 }
 
 /* ---------------------------------------------------------
