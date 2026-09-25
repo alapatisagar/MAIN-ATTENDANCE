@@ -852,6 +852,10 @@ function getLevenshteinSimilarity(s1, s2) {
 function handleVoiceCommandProcess(transcript) {
   const rawText = transcript.toLowerCase();
 
+  // Check if this is a bulk "mark remaining" voice command
+  // e.g. "mark remaining all present", "mark rest present", "mark remaining callers present", "mark remaining absent"
+  const isRemainingCommand = /\b(remaining|rest|others|other)\b/.test(rawText);
+
   // 1. Detect target attendance status intent with Indian English variations
   let targetStatus = null;
   if (/\b(absent|absnt|abscent|absense|not present|not come)\b/.test(rawText)) {
@@ -862,6 +866,26 @@ function handleVoiceCommandProcess(transcript) {
     targetStatus = 'Half Day';
   } else if (/\b(off|holiday|leave|week off|day off)\b/.test(rawText)) {
     targetStatus = 'Holiday / Off';
+  }
+
+  // Handle "mark remaining all present" or "mark remaining callers present"
+  if (isRemainingCommand) {
+    const statusToApply = targetStatus || 'Present';
+    let count = 0;
+
+    state.records.forEach(emp => {
+      if (emp.status === 'Unmarked') {
+        handleMarkAttendance(emp.employeeId, statusToApply);
+        count++;
+      }
+    });
+
+    if (count > 0) {
+      showToast(`🎤 Voice Success: Marked remaining ${count} callers as ${statusToApply}!`, 'success');
+    } else {
+      showToast(`🎤 Voice Notice: All callers are already marked for ${formatUSDate(state.selectedDate)}`, 'info');
+    }
+    return;
   }
 
   // Fallback to pure search if no status intent was spoken
