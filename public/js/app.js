@@ -1102,52 +1102,20 @@ function handleVoiceCommandProcess(transcript) {
    --------------------------------------------------------- */
 function handleShareDailySummary() {
   const dateStr = formatUSDate(state.selectedDate);
-  const total = state.records.length;
-  let present = 0, absent = 0, halfDay = 0, off = 0;
-
   const absentList = [];
-  const halfDayList = [];
-  const offList = [];
 
   state.records.forEach(r => {
-    if (r.status === 'Present') {
-      present++;
-    } else if (r.status === 'Absent') {
-      absent++;
+    if (r.status === 'Absent') {
       absentList.push(r.name);
-    } else if (r.status === 'Half Day') {
-      halfDay++;
-      halfDayList.push(r.name);
-    } else if (r.status === 'Holiday / Off' || r.status === 'On Leave') {
-      off++;
-      offList.push(r.name);
     }
   });
 
-  const markedWork = present + absent + halfDay;
-  const rate = markedWork > 0 ? Math.round(((present + (halfDay * 0.5)) / markedWork) * 100) : 0;
-
-  let msg = `*AR CALLERS ATTENDANCE REPORT (${dateStr})*\n\n` +
-    `📊 *SUMMARY STATS*\n` +
-    `• Total Callers: ${total}\n` +
-    `• Present: ${present}\n` +
-    `• Absent: ${absent}\n` +
-    `• Half Day: ${halfDay}\n` +
-    `• Holiday / Off: ${off}\n` +
-    `• Attendance Rate: ${rate}%\n`;
+  let msg = `*AR CALLERS ABSENTEE LIST (${dateStr})*\n\n`;
 
   if (absentList.length > 0) {
-    msg += `\n❌ *ABSENT CALLERS (${absentList.length})*:\n` + absentList.map(n => `  - ${n}`).join('\n') + `\n`;
+    msg += `❌ *ABSENT CALLERS (${absentList.length})*:\n` + absentList.map(n => `  - ${n}`).join('\n') + `\n`;
   } else {
-    msg += `\n✅ *ABSENT CALLERS*: None (100% Attendance)\n`;
-  }
-
-  if (halfDayList.length > 0) {
-    msg += `\n⏱️ *HALF DAY CALLERS (${halfDayList.length})*:\n` + halfDayList.map(n => `  - ${n}`).join('\n') + `\n`;
-  }
-
-  if (offList.length > 0 && offList.length < total) {
-    msg += `\n🏖️ *HOLIDAY / OFF CALLERS (${offList.length})*:\n` + offList.map(n => `  - ${n}`).join('\n') + `\n`;
+    msg += `✅ *ABSENT CALLERS*: None (100% Attendance)\n`;
   }
 
   msg += `\n_Generated via AR Callers Portal_`;
@@ -1156,7 +1124,7 @@ function handleShareDailySummary() {
   const waUrl = `https://wa.me/?text=${encodedMsg}`;
 
   window.open(waUrl, '_blank');
-  showToast('Opening WhatsApp Daily Summary share link with absent callers list...', 'success');
+  showToast('Opening WhatsApp Share link for Absent Callers list...', 'success');
 }
 
 function toggleVoiceAudioFeedback() {

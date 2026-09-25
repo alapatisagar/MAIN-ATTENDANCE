@@ -4275,15 +4275,6 @@
       "updatedAt": "2026-09-25T20:40:26.727Z"
     },
     {
-      "id": "ATT-SEP-2026-09-25-DBS-2514",
-      "employeeId": "DBS-2514",
-      "employeeName": "Surendra Kolatam",
-      "department": "AR Callers",
-      "date": "2026-09-25",
-      "status": "Absent",
-      "updatedAt": "2026-09-25T20:40:26.727Z"
-    },
-    {
       "id": "ATT-SEP-2026-09-26-DBS-2514",
       "employeeId": "DBS-2514",
       "employeeName": "Surendra Kolatam",
@@ -5216,15 +5207,6 @@
       "employeeName": "Vijay Kumar Naligila",
       "department": "AR Callers",
       "date": "2026-09-24",
-      "status": "Absent",
-      "updatedAt": "2026-09-25T20:40:26.728Z"
-    },
-    {
-      "id": "ATT-SEP-2026-09-25-DBS-566",
-      "employeeId": "DBS-566",
-      "employeeName": "Vijay Kumar Naligila",
-      "department": "AR Callers",
-      "date": "2026-09-25",
       "status": "Absent",
       "updatedAt": "2026-09-25T20:40:26.728Z"
     },
@@ -7097,15 +7079,6 @@
       "employeeName": "Abdul Hameed",
       "department": "AR Callers",
       "date": "2026-09-24",
-      "status": "Absent",
-      "updatedAt": "2026-09-25T20:40:26.728Z"
-    },
-    {
-      "id": "ATT-SEP-2026-09-25-DBS-488",
-      "employeeId": "DBS-488",
-      "employeeName": "Abdul Hameed",
-      "department": "AR Callers",
-      "date": "2026-09-25",
       "status": "Absent",
       "updatedAt": "2026-09-25T20:40:26.728Z"
     },
@@ -9239,15 +9212,6 @@
       "employeeName": "Atla Naga Venu",
       "department": "AR Callers",
       "date": "2026-09-24",
-      "status": "Absent",
-      "updatedAt": "2026-09-25T20:40:26.728Z"
-    },
-    {
-      "id": "ATT-SEP-2026-09-25-DBS-25158",
-      "employeeId": "DBS-25158",
-      "employeeName": "Atla Naga Venu",
-      "department": "AR Callers",
-      "date": "2026-09-25",
       "status": "Absent",
       "updatedAt": "2026-09-25T20:40:26.728Z"
     },
@@ -13741,6 +13705,510 @@
       "date": "2026-09-27",
       "status": "Holiday / Off",
       "updatedAt": "2026-09-25T20:40:26.730Z"
+    },
+    {
+      "id": "ATT-SEP-2026-09-25-DBS-230",
+      "employeeId": "DBS-230",
+      "employeeName": "Dharma Teja Nama",
+      "department": "AR Callers",
+      "date": "2026-09-25",
+      "status": "Present",
+      "updatedAt": "2026-09-25T21:45:14.079Z"
+    },
+    {
+      "id": "ATT-SEP-2026-09-25-DBS-306",
+      "employeeId": "DBS-306",
+      "employeeName": "Rajesh Dhabbakuti",
+      "department": "AR Callers",
+      "date": "2026-09-25",
+      "status": "Present",
+      "updatedAt": "2026-09-25T21:45:14.080Z"
+    },
+    {
+      "id": "ATT-SEP-2026-09-25-DBS-327",
+      "employeeId": "DBS-327",
+      "employeeName": "VIJAYA SAI KRISHNA KEERTHI",
+      "department": "AR Callers",
+      "date": "2026-09-25",
+      "status": "Present",
+      "updatedAt": "2026-09-25T21:45:14.080Z"
+    },
+    {
+      "id": "ATT-SEP-2026-09-25-DBS-352",
+      "employeeId": "DBS-352",
+      "employeeName": "Vijaya Bhaskar Devarapalli",
+      "department": "AR Callers",
+      "date": "2026-09-25",
+      "status": "Present",
+      "updatedAt": "2026-09-25T21:45:14.080Z"
+    },
+    {
+      "id": "ATT-SEP-2026-09-25-DBS-424",
+      "employeeId": "DBS-424",
+      "employeeName": "Rakesh Naragarla",
+      "department": "AR Callers",
+      "date": "2026-09-25",
+      "status": "Present",
+      "updatedAt": "2026-09-25T21:45:14.080Z"
+    },
+    {
+      "id": "ATT-SEP-2026-09-25-DBS-429",
+      "employeeId": "DBS-429",
+      "employeeName": "Durgaprasad Mandava",
+      "department": "AR Callers",
+      "date": "2026-09-25",
+      "status": "Present",
+      "updatedAt": "2026-09-25T21:45:14.080Z"
+    },
+    {
+      "id": "ATT-SEP-2026-09-25-DBS-433",
+      "employeeId": "DBS-433",
+      "employeeName": "Satyanarayana Reddy Akkala",
+      "department": "AR Callers",
+      "date": "2026-09-25",
+      "status": "Present",
+      "updatedAt": "2026-09-25T21:45:14.080Z"
+    },
+    {
+      "id": "ATT-SEP-2026-09-25-DBS-449",
+      "employeeId": "DBS-449",
+      "employeeName": "Jyothi Swaroop Cheemakurti",
+      "department": "AR Callers",
+      "date": "2026-09-25",
+      "status": "Present",
+      "updatedAt": "2026-09-25T21:45:14.080Z"
+    },
+    {
+      "id": "ATT-SEP-2026-09-25-DBS-466",
+      "employeeId": "DBS-466",
+      "employeeName": "Suresh Dabbakuti",
+      "department": "AR Callers",
+      "date": "2026-09-25",
+      "status": "Present",
+      "updatedAt": "2026-09-25T21:45:14.080Z"
+    },
+    {
+      "id": "ATT-SEP-2026-09-25-DBS-488",
+      "employeeId": "DBS-488",
+      "employeeName": "Abdul Hameed",
+      "department": "AR Callers",
+      "date": "2026-09-25",
+      "status": "Absent",
+      "updatedAt": "2026-09-25T21:45:14.080Z"
+    },
+    {
+      "id": "ATT-SEP-2026-09-25-DBS-511",
+      "employeeId": "DBS-511",
+      "employeeName": "Fhayaz Ahammad Shaik",
+      "department": "AR Callers",
+      "date": "2026-09-25",
+      "status": "Present",
+      "updatedAt": "2026-09-25T21:45:14.080Z"
+    },
+    {
+      "id": "ATT-SEP-2026-09-25-DBS-512",
+      "employeeId": "DBS-512",
+      "employeeName": "Rafi Mahammad",
+      "department": "AR Callers",
+      "date": "2026-09-25",
+      "status": "Present",
+      "updatedAt": "2026-09-25T21:45:14.080Z"
+    },
+    {
+      "id": "ATT-SEP-2026-09-25-DBS-513",
+      "employeeId": "DBS-513",
+      "employeeName": "Shahid Shaik",
+      "department": "AR Callers",
+      "date": "2026-09-25",
+      "status": "Present",
+      "updatedAt": "2026-09-25T21:45:14.080Z"
+    },
+    {
+      "id": "ATT-SEP-2026-09-25-DBS-514",
+      "employeeId": "DBS-514",
+      "employeeName": "Zakeer Hussain Mohammed",
+      "department": "AR Callers",
+      "date": "2026-09-25",
+      "status": "Present",
+      "updatedAt": "2026-09-25T21:45:14.080Z"
+    },
+    {
+      "id": "ATT-SEP-2026-09-25-DBS-515",
+      "employeeId": "DBS-515",
+      "employeeName": "Mahaboob Subhani Shaik",
+      "department": "AR Callers",
+      "date": "2026-09-25",
+      "status": "Present",
+      "updatedAt": "2026-09-25T21:45:14.080Z"
+    },
+    {
+      "id": "ATT-SEP-2026-09-25-DBS-540",
+      "employeeId": "DBS-540",
+      "employeeName": "SAGAR ALAPATI",
+      "department": "AR Callers",
+      "date": "2026-09-25",
+      "status": "Present",
+      "updatedAt": "2026-09-25T21:45:14.080Z"
+    },
+    {
+      "id": "ATT-SEP-2026-09-25-DBS-548",
+      "employeeId": "DBS-548",
+      "employeeName": "Praneeth Raj Bontha",
+      "department": "AR Callers",
+      "date": "2026-09-25",
+      "status": "Present",
+      "updatedAt": "2026-09-25T21:45:14.080Z"
+    },
+    {
+      "id": "ATT-SEP-2026-09-25-DBS-549",
+      "employeeId": "DBS-549",
+      "employeeName": "Srinivas Mannem",
+      "department": "AR Callers",
+      "date": "2026-09-25",
+      "status": "Present",
+      "updatedAt": "2026-09-25T21:45:14.080Z"
+    },
+    {
+      "id": "ATT-SEP-2026-09-25-DBS-550",
+      "employeeId": "DBS-550",
+      "employeeName": "Prathyush Raj Bontha",
+      "department": "AR Callers",
+      "date": "2026-09-25",
+      "status": "Present",
+      "updatedAt": "2026-09-25T21:45:14.080Z"
+    },
+    {
+      "id": "ATT-SEP-2026-09-25-DBS-554",
+      "employeeId": "DBS-554",
+      "employeeName": "Purna Venkata Krishna Sai Pattem",
+      "department": "AR Callers",
+      "date": "2026-09-25",
+      "status": "Present",
+      "updatedAt": "2026-09-25T21:45:14.080Z"
+    },
+    {
+      "id": "ATT-SEP-2026-09-25-DBS-560",
+      "employeeId": "DBS-560",
+      "employeeName": "Anilkumar Ullamgunta",
+      "department": "AR Callers",
+      "date": "2026-09-25",
+      "status": "Present",
+      "updatedAt": "2026-09-25T21:45:14.080Z"
+    },
+    {
+      "id": "ATT-SEP-2026-09-25-DBS-566",
+      "employeeId": "DBS-566",
+      "employeeName": "Vijay Kumar Naligila",
+      "department": "AR Callers",
+      "date": "2026-09-25",
+      "status": "Absent",
+      "updatedAt": "2026-09-25T21:45:14.080Z"
+    },
+    {
+      "id": "ATT-SEP-2026-09-25-DBS-568",
+      "employeeId": "DBS-568",
+      "employeeName": "Venkata Ramesh Polisetty",
+      "department": "AR Callers",
+      "date": "2026-09-25",
+      "status": "Present",
+      "updatedAt": "2026-09-25T21:45:14.080Z"
+    },
+    {
+      "id": "ATT-SEP-2026-09-25-DBS-2511",
+      "employeeId": "DBS-2511",
+      "employeeName": "Leela Krishna Dasari",
+      "department": "AR Callers",
+      "date": "2026-09-25",
+      "status": "Present",
+      "updatedAt": "2026-09-25T21:45:14.080Z"
+    },
+    {
+      "id": "ATT-SEP-2026-09-25-DBS-2512",
+      "employeeId": "DBS-2512",
+      "employeeName": "Bhavani Shankar Kommuri",
+      "department": "AR Callers",
+      "date": "2026-09-25",
+      "status": "Present",
+      "updatedAt": "2026-09-25T21:45:14.080Z"
+    },
+    {
+      "id": "ATT-SEP-2026-09-25-DBS-2514",
+      "employeeId": "DBS-2514",
+      "employeeName": "Surendra Kolatam",
+      "department": "AR Callers",
+      "date": "2026-09-25",
+      "status": "Absent",
+      "updatedAt": "2026-09-25T21:45:14.080Z"
+    },
+    {
+      "id": "ATT-SEP-2026-09-25-DBS-2519",
+      "employeeId": "DBS-2519",
+      "employeeName": "Shiloni Sastry Dunna",
+      "department": "AR Callers",
+      "date": "2026-09-25",
+      "status": "Present",
+      "updatedAt": "2026-09-25T21:45:14.080Z"
+    },
+    {
+      "id": "ATT-SEP-2026-09-25-DBS-2530",
+      "employeeId": "DBS-2530",
+      "employeeName": "Lalith Venkata Sai Kota",
+      "department": "AR Callers",
+      "date": "2026-09-25",
+      "status": "Present",
+      "updatedAt": "2026-09-25T21:45:14.080Z"
+    },
+    {
+      "id": "ATT-SEP-2026-09-25-DBS-2554",
+      "employeeId": "DBS-2554",
+      "employeeName": "Mohiddin Mohammad",
+      "department": "AR Callers",
+      "date": "2026-09-25",
+      "status": "Present",
+      "updatedAt": "2026-09-25T21:45:14.080Z"
+    },
+    {
+      "id": "ATT-SEP-2026-09-25-DBS-2555",
+      "employeeId": "DBS-2555",
+      "employeeName": "Liveeju Borugadda",
+      "department": "AR Callers",
+      "date": "2026-09-25",
+      "status": "Present",
+      "updatedAt": "2026-09-25T21:45:14.080Z"
+    },
+    {
+      "id": "ATT-SEP-2026-09-25-DBS-2604",
+      "employeeId": "DBS-2604",
+      "employeeName": "Gattu Navakanth",
+      "department": "AR Callers",
+      "date": "2026-09-25",
+      "status": "Present",
+      "updatedAt": "2026-09-25T21:45:14.080Z"
+    },
+    {
+      "id": "ATT-SEP-2026-09-25-DBS-2605",
+      "employeeId": "DBS-2605",
+      "employeeName": "Dividevara Naga Babu",
+      "department": "AR Callers",
+      "date": "2026-09-25",
+      "status": "Present",
+      "updatedAt": "2026-09-25T21:45:14.080Z"
+    },
+    {
+      "id": "ATT-SEP-2026-09-25-DBS-2606",
+      "employeeId": "DBS-2606",
+      "employeeName": "Shaik Jubear Ahammed",
+      "department": "AR Callers",
+      "date": "2026-09-25",
+      "status": "Present",
+      "updatedAt": "2026-09-25T21:45:14.080Z"
+    },
+    {
+      "id": "ATT-SEP-2026-09-25-DBS-2607",
+      "employeeId": "DBS-2607",
+      "employeeName": "Gollamudi Yehoshuva",
+      "department": "AR Callers",
+      "date": "2026-09-25",
+      "status": "Present",
+      "updatedAt": "2026-09-25T21:45:14.080Z"
+    },
+    {
+      "id": "ATT-SEP-2026-09-25-DBS-2613",
+      "employeeId": "DBS-2613",
+      "employeeName": "Naga Sasidhar Reddy Akkala",
+      "department": "AR Callers",
+      "date": "2026-09-25",
+      "status": "Present",
+      "updatedAt": "2026-09-25T21:45:14.080Z"
+    },
+    {
+      "id": "ATT-SEP-2026-09-25-DBS-2615",
+      "employeeId": "DBS-2615",
+      "employeeName": "Mamilla Sanjay",
+      "department": "AR Callers",
+      "date": "2026-09-25",
+      "status": "Present",
+      "updatedAt": "2026-09-25T21:45:14.080Z"
+    },
+    {
+      "id": "ATT-SEP-2026-09-25-DBS-2616",
+      "employeeId": "DBS-2616",
+      "employeeName": "Jaffer Shaik",
+      "department": "AR Callers",
+      "date": "2026-09-25",
+      "status": "Present",
+      "updatedAt": "2026-09-25T21:45:14.080Z"
+    },
+    {
+      "id": "ATT-SEP-2026-09-25-DBS-2617",
+      "employeeId": "DBS-2617",
+      "employeeName": "Karthik Dividevara",
+      "department": "AR Callers",
+      "date": "2026-09-25",
+      "status": "Present",
+      "updatedAt": "2026-09-25T21:45:14.080Z"
+    },
+    {
+      "id": "ATT-SEP-2026-09-25-DBS-2639",
+      "employeeId": "DBS-2639",
+      "employeeName": "Shaik Kutubuddin",
+      "department": "AR Callers",
+      "date": "2026-09-25",
+      "status": "Present",
+      "updatedAt": "2026-09-25T21:45:14.080Z"
+    },
+    {
+      "id": "ATT-SEP-2026-09-25-DBS-2640",
+      "employeeId": "DBS-2640",
+      "employeeName": "Lukka Devendra",
+      "department": "AR Callers",
+      "date": "2026-09-25",
+      "status": "Present",
+      "updatedAt": "2026-09-25T21:45:14.080Z"
+    },
+    {
+      "id": "ATT-SEP-2026-09-25-DBS-2648",
+      "employeeId": "DBS-2648",
+      "employeeName": "Aadi Reddy Cheerala",
+      "department": "AR Callers",
+      "date": "2026-09-25",
+      "status": "Present",
+      "updatedAt": "2026-09-25T21:45:14.080Z"
+    },
+    {
+      "id": "ATT-SEP-2026-09-25-DBS-2649",
+      "employeeId": "DBS-2649",
+      "employeeName": "Durga Sri Venkateswarlu Vemula",
+      "department": "AR Callers",
+      "date": "2026-09-25",
+      "status": "Present",
+      "updatedAt": "2026-09-25T21:45:14.080Z"
+    },
+    {
+      "id": "ATT-SEP-2026-09-25-DBS-2661",
+      "employeeId": "DBS-2661",
+      "employeeName": "Pendyala Venkata Ramesh",
+      "department": "AR Callers",
+      "date": "2026-09-25",
+      "status": "Present",
+      "updatedAt": "2026-09-25T21:45:14.080Z"
+    },
+    {
+      "id": "ATT-SEP-2026-09-25-DBS-2668",
+      "employeeId": "DBS-2668",
+      "employeeName": "Emani Rakesh",
+      "department": "AR Callers",
+      "date": "2026-09-25",
+      "status": "Present",
+      "updatedAt": "2026-09-25T21:45:14.080Z"
+    },
+    {
+      "id": "ATT-SEP-2026-09-25-DBS-2669",
+      "employeeId": "DBS-2669",
+      "employeeName": "Pamu Nagendra Reddy",
+      "department": "AR Callers",
+      "date": "2026-09-25",
+      "status": "Present",
+      "updatedAt": "2026-09-25T21:45:14.080Z"
+    },
+    {
+      "id": "ATT-SEP-2026-09-25-DBS-2674",
+      "employeeId": "DBS-2674",
+      "employeeName": "Mogalipuvvu Ankamma Rao",
+      "department": "AR Callers",
+      "date": "2026-09-25",
+      "status": "Present",
+      "updatedAt": "2026-09-25T21:45:14.080Z"
+    },
+    {
+      "id": "ATT-SEP-2026-09-25-DBS-2684",
+      "employeeId": "DBS-2684",
+      "employeeName": "Shaik Rehman Beig",
+      "department": "AR Callers",
+      "date": "2026-09-25",
+      "status": "Present",
+      "updatedAt": "2026-09-25T21:45:14.080Z"
+    },
+    {
+      "id": "ATT-SEP-2026-09-25-DBS-2685",
+      "employeeId": "DBS-2685",
+      "employeeName": "Aradhyula Sai Avinash Babu",
+      "department": "AR Callers",
+      "date": "2026-09-25",
+      "status": "Present",
+      "updatedAt": "2026-09-25T21:45:14.080Z"
+    },
+    {
+      "id": "ATT-SEP-2026-09-25-DBS-2686",
+      "employeeId": "DBS-2686",
+      "employeeName": "Thatapudi Anvesh Babu",
+      "department": "AR Callers",
+      "date": "2026-09-25",
+      "status": "Present",
+      "updatedAt": "2026-09-25T21:45:14.080Z"
+    },
+    {
+      "id": "ATT-SEP-2026-09-25-DBS-2690",
+      "employeeId": "DBS-2690",
+      "employeeName": "Nuthalapati Karthik Teja",
+      "department": "AR Callers",
+      "date": "2026-09-25",
+      "status": "Present",
+      "updatedAt": "2026-09-25T21:45:14.080Z"
+    },
+    {
+      "id": "ATT-SEP-2026-09-25-DBS-25114",
+      "employeeId": "DBS-25114",
+      "employeeName": "Syam Venkata Sai Naralasetty",
+      "department": "AR Callers",
+      "date": "2026-09-25",
+      "status": "Present",
+      "updatedAt": "2026-09-25T21:45:14.080Z"
+    },
+    {
+      "id": "ATT-SEP-2026-09-25-DBS-25132",
+      "employeeId": "DBS-25132",
+      "employeeName": "Siva Naga Nikhil Krishna Kurra",
+      "department": "AR Callers",
+      "date": "2026-09-25",
+      "status": "Present",
+      "updatedAt": "2026-09-25T21:45:14.080Z"
+    },
+    {
+      "id": "ATT-SEP-2026-09-25-DBS-25133",
+      "employeeId": "DBS-25133",
+      "employeeName": "Mani Varma Pusapati",
+      "department": "AR Callers",
+      "date": "2026-09-25",
+      "status": "Present",
+      "updatedAt": "2026-09-25T21:45:14.080Z"
+    },
+    {
+      "id": "ATT-SEP-2026-09-25-DBS-25138",
+      "employeeId": "DBS-25138",
+      "employeeName": "Surendra Gudvalli",
+      "department": "AR Callers",
+      "date": "2026-09-25",
+      "status": "Present",
+      "updatedAt": "2026-09-25T21:45:14.080Z"
+    },
+    {
+      "id": "ATT-SEP-2026-09-25-DBS-25158",
+      "employeeId": "DBS-25158",
+      "employeeName": "Atla Naga Venu",
+      "department": "AR Callers",
+      "date": "2026-09-25",
+      "status": "Absent",
+      "updatedAt": "2026-09-25T21:45:14.080Z"
+    },
+    {
+      "id": "ATT-SEP-2026-09-25-DBS-25159",
+      "employeeId": "DBS-25159",
+      "employeeName": "Annavarapu Abhishek",
+      "department": "AR Callers",
+      "date": "2026-09-25",
+      "status": "Present",
+      "updatedAt": "2026-09-25T21:45:14.080Z"
     }
   ],
   "leaves": [
