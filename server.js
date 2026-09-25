@@ -142,100 +142,163 @@ function getInitialData() {
   };
 }
 
-function loadDB() {
-  if (!fs.existsSync(DB_FILE)) {
-    const initial = getInitialData();
-    saveDB(initial);
-    return initial;
+// Permanent Data Preservation & Multi-Backup Safeguards
+const MASTER_BACKUP_FILE = path.join(BACKUP_DIR, 'db_master_archive.json');
+
+function restoreFromBackup() {
+  // 1. Try master archive first
+  if (fs.existsSync(MASTER_BACKUP_FILE)) {
+    try {
+      const content = fs.readFileSync(MASTER_BACKUP_FILE, 'utf8');
+      const db = JSON.parse(content);
+      if (db && Array.isArray(db.employees) && Array.isArray(db.attendance) && db.attendance.length > 0) {
+        return db;
+      }
+    } catch (e) {}
   }
-  try {
-    const content = fs.readFileSync(DB_FILE, 'utf8');
-    const db = JSON.parse(content);
-    if (!db.employees || !Array.isArray(db.employees)) {
-      const initial = getInitialData();
-      saveDB(initial);
-      return initial;
-    }
 
-    // Remove legacy co-admin DBS-7569
-    db.employees = db.employees.filter(e => e.id !== 'DBS-7569');
-
-    // Force all employees to AR Callers department
-    db.employees.forEach(e => {
-      e.department = 'AR Callers';
-      if (typeof e.isArchived === 'undefined') e.isArchived = false;
-    });
-
-    // Update Primary Admin (SAGAR ALAPATI)
-    let admin1 = db.employees.find(e => e.id === 'DBS-540' || e.phone === '9704225352');
-    if (admin1) {
-      admin1.name = 'SAGAR ALAPATI';
-      admin1.phone = '9704225352';
-      admin1.roleType = 'Admin';
-      admin1.isArchived = false;
-      if (!admin1.passwordHash) admin1.passwordHash = hashPassword('9640000890');
-    } else {
-      db.employees.push({
-        id: 'DBS-540',
-        name: 'SAGAR ALAPATI',
-        phone: '9704225352',
-        department: 'AR Callers',
-        role: 'System Administrator',
-        roleType: 'Admin',
-        isArchived: false,
-        passwordHash: hashPassword('9640000890'),
-        avatarColor: '#DC2626'
-      });
-    }
-
-    // Update Co-Admin (VIJAYA SAI KRISHNA KEERTHI)
-    let admin2 = db.employees.find(e => e.phone === '7569258789' || e.id === 'DBS-327');
-    if (admin2) {
-      admin2.id = 'DBS-327';
-      admin2.name = 'VIJAYA SAI KRISHNA KEERTHI';
-      admin2.phone = '7569258789';
-      admin2.roleType = 'Admin';
-      admin2.isArchived = false;
-      admin2.passwordHash = hashPassword('Admin@123');
-    } else {
-      db.employees.push({
-        id: 'DBS-327',
-        name: 'VIJAYA SAI KRISHNA KEERTHI',
-        phone: '7569258789',
-        department: 'AR Callers',
-        role: 'System Administrator',
-        roleType: 'Admin',
-        isArchived: false,
-        passwordHash: hashPassword('Admin@123'),
-        avatarColor: '#F59E0B'
-      });
-    }
-
-    sortNumerically(db.employees);
-    saveDB(db);
-    return db;
-  } catch (err) {
-    const initial = getInitialData();
-    saveDB(initial);
-    return initial;
+  // 2. Try latest snapshot backup file
+  if (fs.existsSync(BACKUP_DIR)) {
+    try {
+      const files = fs.readdirSync(BACKUP_DIR).filter(f => f.endsWith('.json')).sort().reverse();
+      for (const f of files) {
+        const fullPath = path.join(BACKUP_DIR, f);
+        const content = fs.readFileSync(fullPath, 'utf8');
+        const db = JSON.parse(content);
+        if (db && Array.isArray(db.employees) && Array.isArray(db.attendance) && db.attendance.length > 0) {
+          return db;
+        }
+      }
+    } catch (e) {}
   }
+
+  return null;
 }
 
-// Permanent Data Preservation & Daily Automated Backup
 function saveDB(data) {
-  if (data && data.employees) {
+  if (!data) return;
+
+  if (data.employees) {
     sortNumerically(data.employees);
   }
-  fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), 'utf8');
 
-  // Create daily automated snapshot backup
+  if (!data.attendance) {
+    data.attendance = [];
+  }
+
+  // Permanent Protection: Merge with existing on-disk records to guarantee zero data loss
+  if (fs.existsSync(DB_FILE)) {
+    try {
+      const existingContent = fs.readFileSync(DB_FILE, 'utf8');
+      const existingDB = JSON.parse(existingContent);
+      if (existingDB && Array.isArray(existingDB.attendance) && existingDB.attendance.length > data.attendance.length) {
+        const existingMap = new Map();
+        existingDB.attendance.forEach(a => existingMap.set(`${a.date}_${a.employeeId}`, a));
+        data.attendance.forEach(a => existingMap.set(`${a.date}_${a.employeeId}`, a));
+        data.attendance = Array.from(existingMap.values());
+      }
+    } catch (e) {}
+  }
+
+  const jsonStr = JSON.stringify(data, null, 2);
+
+  // Write to primary database, master permanent archive, and daily snapshot
+  fs.writeFileSync(DB_FILE, jsonStr, 'utf8');
+  fs.writeFileSync(MASTER_BACKUP_FILE, jsonStr, 'utf8');
+
   try {
     const todayStr = new Date().toISOString().split('T')[0];
     const backupPath = path.join(BACKUP_DIR, `db_snapshot_${todayStr}.json`);
-    fs.writeFileSync(backupPath, JSON.stringify(data, null, 2), 'utf8');
-  } catch (e) {
-    // backup logging ignored
+    fs.writeFileSync(backupPath, jsonStr, 'utf8');
+  } catch (e) {}
+}
+
+function loadDB() {
+  let db = null;
+
+  if (fs.existsSync(DB_FILE)) {
+    try {
+      const content = fs.readFileSync(DB_FILE, 'utf8');
+      db = JSON.parse(content);
+    } catch (err) {
+      console.error('Warning: db.json read error, attempting backup restore...', err);
+      db = restoreFromBackup();
+    }
+  } else {
+    db = restoreFromBackup();
   }
+
+  if (!db || !db.employees || !Array.isArray(db.employees)) {
+    db = getInitialData();
+  }
+
+  // Ensure attendance array exists and restore from backup if missing
+  if (!db.attendance || !Array.isArray(db.attendance) || db.attendance.length === 0) {
+    const restored = restoreFromBackup();
+    if (restored && restored.attendance && restored.attendance.length > 0) {
+      db.attendance = restored.attendance;
+    } else {
+      db.attendance = db.attendance || [];
+    }
+  }
+
+  // Remove legacy co-admin DBS-7569
+  db.employees = db.employees.filter(e => e.id !== 'DBS-7569');
+
+  // Force all employees to AR Callers department
+  db.employees.forEach(e => {
+    e.department = 'AR Callers';
+    if (typeof e.isArchived === 'undefined') e.isArchived = false;
+  });
+
+  // Ensure Primary Admin (SAGAR ALAPATI)
+  let admin1 = db.employees.find(e => e.id === 'DBS-540' || e.phone === '9704225352');
+  if (admin1) {
+    admin1.name = 'SAGAR ALAPATI';
+    admin1.phone = '9704225352';
+    admin1.roleType = 'Admin';
+    admin1.isArchived = false;
+    if (!admin1.passwordHash) admin1.passwordHash = hashPassword('9640000890');
+  } else {
+    db.employees.push({
+      id: 'DBS-540',
+      name: 'SAGAR ALAPATI',
+      phone: '9704225352',
+      department: 'AR Callers',
+      role: 'System Administrator',
+      roleType: 'Admin',
+      isArchived: false,
+      passwordHash: hashPassword('9640000890'),
+      avatarColor: '#DC2626'
+    });
+  }
+
+  // Ensure Co-Admin (VIJAYA SAI KRISHNA KEERTHI)
+  let admin2 = db.employees.find(e => e.phone === '7569258789' || e.id === 'DBS-327');
+  if (admin2) {
+    admin2.id = 'DBS-327';
+    admin2.name = 'VIJAYA SAI KRISHNA KEERTHI';
+    admin2.phone = '7569258789';
+    admin2.roleType = 'Admin';
+    admin2.isArchived = false;
+    admin2.passwordHash = hashPassword('Admin@123');
+  } else {
+    db.employees.push({
+      id: 'DBS-327',
+      name: 'VIJAYA SAI KRISHNA KEERTHI',
+      phone: '7569258789',
+      department: 'AR Callers',
+      role: 'System Administrator',
+      roleType: 'Admin',
+      isArchived: false,
+      passwordHash: hashPassword('Admin@123'),
+      avatarColor: '#F59E0B'
+    });
+  }
+
+  sortNumerically(db.employees);
+  saveDB(db);
+  return db;
 }
 
 // ---------------------------------------------------------
