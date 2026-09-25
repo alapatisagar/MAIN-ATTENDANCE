@@ -12,9 +12,7 @@ const state = {
   records: [],
   searchQuery: '',
   activeTab: 'All',
-  autoPresentCountdown: 60,
-  autoPresentIntervalId: null,
-  timerTargetDate: null
+  enableVoiceAudio: true
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -566,17 +564,56 @@ async function fetchMonthlySummaryData() {
       return;
     }
 
-    tbody.innerHTML = data.summary.map(item => `
-      <tr>
-        <td><strong>${escapeHTML(item.id)}</strong></td>
-        <td>${escapeHTML(item.name)}</td>
-        <td class="text-center text-green"><strong>${item.present}</strong></td>
-        <td class="text-center text-red"><strong>${item.absent}</strong></td>
-        <td class="text-center text-purple"><strong>${item.halfDay}</strong></td>
-        <td class="text-center text-blue"><strong>${item.holidayOff}</strong></td>
-        <td class="text-center text-yellow"><strong>${item.rate}</strong></td>
-      </tr>
-    `).join('');
+    // Compute Monthly Attendance Distribution Metrics for Visual Bar
+    let totalP = 0, totalA = 0, totalH = 0, totalO = 0;
+    data.summary.forEach(s => {
+      totalP += (s.present || 0);
+      totalA += (s.absent || 0);
+      totalH += (s.halfDay || 0);
+      totalO += (s.holidayOff || 0);
+    });
+
+    const sumAll = totalP + totalA + totalH + totalO;
+    const pPct = sumAll > 0 ? Math.round((totalP / sumAll) * 100) : 0;
+    const aPct = sumAll > 0 ? Math.round((totalA / sumAll) * 100) : 0;
+    const hPct = sumAll > 0 ? Math.round((totalH / sumAll) * 100) : 0;
+    const oPct = sumAll > 0 ? Math.round((totalO / sumAll) * 100) : 0;
+
+    const barWrap = document.getElementById('analyticsBarWrap');
+    if (barWrap) {
+      barWrap.innerHTML = `
+        <div class="analytics-progress-bar">
+          <div class="analytics-segment segment-present" style="width: ${pPct}%" title="Present: ${pPct}%"></div>
+          <div class="analytics-segment segment-absent" style="width: ${aPct}%" title="Absent: ${aPct}%"></div>
+          <div class="analytics-segment segment-halfday" style="width: ${hPct}%" title="Half Day: ${hPct}%"></div>
+          <div class="analytics-segment segment-off" style="width: ${oPct}%" title="Holiday/Off: ${oPct}%"></div>
+        </div>
+        <div class="analytics-legend">
+          <div class="legend-item"><span class="legend-dot segment-present"></span> Present: <strong>${totalP} (${pPct}%)</strong></div>
+          <div class="legend-item"><span class="legend-dot segment-absent"></span> Absent: <strong>${totalA} (${aPct}%)</strong></div>
+          <div class="legend-item"><span class="legend-dot segment-halfday"></span> Half Day: <strong>${totalH} (${hPct}%)</strong></div>
+          <div class="legend-item"><span class="legend-dot segment-off"></span> Holiday/Off: <strong>${totalO} (${oPct}%)</strong></div>
+        </div>
+      `;
+    }
+
+    tbody.innerHTML = data.summary.map(item => {
+      const isPerfect = (item.absent === 0 && item.present > 0);
+      return `
+        <tr>
+          <td><strong>${escapeHTML(item.id)}</strong></td>
+          <td>
+            ${escapeHTML(item.name)}
+            ${isPerfect ? '<span class="streak-badge"><i class="fa-solid fa-star text-yellow"></i> 100% Perfect</span>' : ''}
+          </td>
+          <td class="text-center text-green"><strong>${item.present}</strong></td>
+          <td class="text-center text-red"><strong>${item.absent}</strong></td>
+          <td class="text-center text-purple"><strong>${item.halfDay}</strong></td>
+          <td class="text-center text-blue"><strong>${item.holidayOff}</strong></td>
+          <td class="text-center text-yellow"><strong>${item.rate}</strong></td>
+        </tr>
+      `;
+    }).join('');
   } catch (err) {
     tbody.innerHTML = `<tr><td colspan="7" class="text-center text-red">Error loading monthly summary</td></tr>`;
   }
@@ -937,7 +974,9 @@ function handleVoiceCommandProcess(transcript) {
     });
 
     if (count > 0) {
-      showToast(`🎤 Voice Success: Marked remaining ${count} callers as ${statusToApply}!`, 'success');
+      const msg = `Marked remaining ${count} callers as ${statusToApply}`;
+      showToast(`🎤 Voice Success: ${msg}!`, 'success');
+      speakVoiceConfirmation(msg);
     } else {
       showToast(`🎤 Voice Notice: All callers are already marked for ${formatUSDate(state.selectedDate)}`, 'info');
     }
@@ -1036,11 +1075,70 @@ function handleVoiceCommandProcess(transcript) {
   });
 
   if (markedNames.length > 0) {
-    showToast(`🎤 Voice Marked ${targetStatus} for: ${markedNames.join(', ')}`, 'success');
+    const msg = `Marked ${targetStatus} for ${markedNames.join(', ')}`;
+    showToast(`🎤 Voice Success: ${msg}`, 'success');
+    speakVoiceConfirmation(msg);
   }
 
   if (unmatchedQueries.length > 0) {
     showToast(`🎤 Could not match caller: "${unmatchedQueries.join(', ')}"`, 'error');
   }
+}
+
+/* ---------------------------------------------------------
+   8. WHATSAPP SUMMARY & VOICE SPEECH SYNTHESIS
+   --------------------------------------------------------- */
+function handleShareDailySummary() {
+  const dateStr = formatUSDate(state.selectedDate);
+  const total = state.records.length;
+  let present = 0, absent = 0, halfDay = 0, off = 0;
+
+  state.records.forEach(r => {
+    if (r.status === 'Present') present++;
+    else if (r.status === 'Absent') absent++;
+    else if (r.status === 'Half Day') halfDay++;
+    else if (r.status === 'Holiday / Off' || r.status === 'On Leave') off++;
+  });
+
+  const markedWork = present + absent + halfDay;
+  const rate = markedWork > 0 ? Math.round(((present + (halfDay * 0.5)) / markedWork) * 100) : 0;
+
+  const msg = `*AR Callers Attendance Summary (${dateStr})*\n` +
+    `• Total Callers: ${total}\n` +
+    `• Present: ${present}\n` +
+    `• Absent: ${absent}\n` +
+    `• Half Day: ${halfDay}\n` +
+    `• Holiday / Off: ${off}\n` +
+    `• Attendance Rate: ${rate}%\n\n` +
+    `_Generated via AR Callers Portal_`;
+
+  const encodedMsg = encodeURIComponent(msg);
+  const waUrl = `https://wa.me/?text=${encodedMsg}`;
+
+  window.open(waUrl, '_blank');
+  showToast('Opening WhatsApp Daily Summary share link...', 'success');
+}
+
+function toggleVoiceAudioFeedback() {
+  state.enableVoiceAudio = !state.enableVoiceAudio;
+  const btn = document.getElementById('voiceAudioToggleBtn');
+  if (btn) {
+    btn.innerHTML = state.enableVoiceAudio
+      ? `<i class="fa-solid fa-volume-high text-yellow"></i> Voice Audio: ON`
+      : `<i class="fa-solid fa-volume-xmark text-muted"></i> Voice Audio: OFF`;
+  }
+  showToast(`Voice Audio Feedback: ${state.enableVoiceAudio ? 'ENABLED' : 'DISABLED'}`, 'info');
+}
+
+function speakVoiceConfirmation(text) {
+  if (!state.enableVoiceAudio || !('speechSynthesis' in window)) return;
+  try {
+    window.speechSynthesis.cancel();
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.rate = 1.0;
+    utter.pitch = 1.0;
+    utter.lang = 'en-IN';
+    window.speechSynthesis.speak(utter);
+  } catch (e) {}
 }
 
