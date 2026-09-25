@@ -19,6 +19,20 @@ const state = {
 
 document.addEventListener('DOMContentLoaded', () => {
   initApp();
+
+  // Close active modals on Escape key press
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      document.querySelectorAll('.modal-overlay.active').forEach(m => m.classList.remove('active'));
+    }
+  });
+
+  // Close active modal when clicking outside on the dark backdrop overlay
+  document.addEventListener('click', (e) => {
+    if (e.target && e.target.classList && e.target.classList.contains('modal-overlay')) {
+      e.target.classList.remove('active');
+    }
+  });
 });
 
 function initApp() {
