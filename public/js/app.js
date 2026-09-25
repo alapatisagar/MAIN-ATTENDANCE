@@ -742,7 +742,7 @@ function onCalendarMonthYearChange() {
 }
 
 /* ---------------------------------------------------------
-   7. VOICE COMMAND RECOGNITION (WEB SPEECH API)
+   7. VOICE COMMAND RECOGNITION (INDIAN ENGLISH & FUZZY MATCH)
    --------------------------------------------------------- */
 let speechRecognitionObj = null;
 let isVoiceListening = false;
@@ -766,12 +766,13 @@ function toggleVoiceRecognition() {
     speechRecognitionObj = new SpeechRecognition();
     speechRecognitionObj.continuous = false;
     speechRecognitionObj.interimResults = false;
-    speechRecognitionObj.lang = 'en-US';
+    // Set to Indian English (en-IN) for accurate Indian accent & name recognition
+    speechRecognitionObj.lang = 'en-IN';
 
     speechRecognitionObj.onstart = () => {
       isVoiceListening = true;
       if (micBtn) micBtn.classList.add('listening');
-      showToast('🎤 Voice Active! Speak e.g., "Mark absent for Rajesh, Durga, and Siva"', 'success');
+      showToast('🎤 Listening (Indian English)... Speak e.g. "Mark absent for Rajesh, Durga and Siva"', 'success');
     };
 
     speechRecognitionObj.onend = () => {
@@ -783,7 +784,7 @@ function toggleVoiceRecognition() {
       isVoiceListening = false;
       if (micBtn) micBtn.classList.remove('listening');
       if (event.error !== 'no-speech') {
-        showToast(`Voice microphone error: ${event.error}`, 'error');
+        showToast(`Voice error: ${event.error}`, 'error');
       }
     };
 
@@ -799,88 +800,167 @@ function toggleVoiceRecognition() {
 
     speechRecognitionObj.start();
   } catch (err) {
-    showToast('Could not access microphone. Please grant permission.', 'error');
+    showToast('Could not access microphone. Please grant browser permission.', 'error');
   }
+}
+
+// Phonetic normalization for Indian speech & name variations
+function normalizePhonetic(str) {
+  if (!str) return '';
+  return str.toLowerCase()
+    .replace(/sh/g, 's')
+    .replace(/ch/g, 'c')
+    .replace(/ph/g, 'f')
+    .replace(/th/g, 't')
+    .replace(/ee/g, 'i')
+    .replace(/oo/g, 'u')
+    .replace(/aa/g, 'a')
+    .replace(/y/g, 'i')
+    .replace(/ck/g, 'k')
+    .replace(/([a-z])\1+/g, '$1') // remove double letters (e.g. kk -> k, ss -> s)
+    .replace(/[^a-z0-9\s]/g, '')
+    .trim();
+}
+
+// Levenshtein distance similarity (0.0 to 1.0)
+function getLevenshteinSimilarity(s1, s2) {
+  const a = normalizePhonetic(s1);
+  const b = normalizePhonetic(s2);
+  if (a === b) return 1.0;
+  if (!a.length || !b.length) return 0.0;
+
+  const matrix = Array.from({ length: a.length + 1 }, () => Array(b.length + 1).fill(0));
+  for (let i = 0; i <= a.length; i++) matrix[i][0] = i;
+  for (let j = 0; j <= b.length; j++) matrix[0][j] = j;
+
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      matrix[i][j] = Math.min(
+        matrix[i - 1][j] + 1,
+        matrix[i][j - 1] + 1,
+        matrix[i - 1][j - 1] + cost
+      );
+    }
+  }
+
+  const distance = matrix[a.length][b.length];
+  const maxLen = Math.max(a.length, b.length);
+  return 1 - (distance / maxLen);
 }
 
 function handleVoiceCommandProcess(transcript) {
   const rawText = transcript.toLowerCase();
 
-  // 1. Detect target attendance status
+  // 1. Detect target attendance status intent with Indian English variations
   let targetStatus = null;
-  if (rawText.includes('absent')) {
+  if (/\b(absent|absnt|abscent|absense|not present|not come)\b/.test(rawText)) {
     targetStatus = 'Absent';
-  } else if (rawText.includes('present')) {
+  } else if (/\b(present|prsnt|prezent|prizent|came|available|attended)\b/.test(rawText)) {
     targetStatus = 'Present';
-  } else if (rawText.includes('half day') || rawText.includes('halfday') || rawText.includes('half')) {
+  } else if (/\b(half day|halfday|haf day|half|1\/2 day)\b/.test(rawText)) {
     targetStatus = 'Half Day';
-  } else if (rawText.includes('off') || rawText.includes('holiday') || rawText.includes('leave')) {
+  } else if (/\b(off|holiday|leave|week off|day off)\b/.test(rawText)) {
     targetStatus = 'Holiday / Off';
   }
 
-  // If no status command detected, fallback to search mode
+  // Fallback to pure search if no status intent was spoken
   if (!targetStatus) {
     handleSearchInput();
-    showToast(`🎤 Voice Search: Filtered for "${transcript}"`, 'success');
+    showToast(`🎤 Voice Search: "${transcript}"`, 'success');
     return;
   }
 
-  // 2. Strip status & command keywords to isolate employee names
+  // 2. Strip status & command keywords to isolate target employee names
   let namesSection = rawText
-    .replace(/\bmark\b/g, '')
-    .replace(/\bas\b/g, '')
-    .replace(/\bfor\b/g, '')
-    .replace(/\babsent\b/g, '')
-    .replace(/\bpresent\b/g, '')
-    .replace(/\bhalf day\b/g, '')
-    .replace(/\bhalfday\b/g, '')
-    .replace(/\bhalf\b/g, '')
-    .replace(/\boff\b/g, '')
-    .replace(/\bholiday\b/g, '')
-    .replace(/\bleave\b/g, '')
-    .replace(/\bemployee\b/g, '')
-    .replace(/\bemployees\b/g, '')
-    .replace(/\bcaller\b/g, '')
-    .replace(/\bcallers\b/g, '')
+    .replace(/\b(mark|make|set|put|as|for|please|the|caller|callers|employee|employees|list|member|members)\b/g, '')
+    .replace(/\b(absent|absnt|abscent|absense|not present|not come)\b/g, '')
+    .replace(/\b(present|prsnt|prezent|prizent|came|available|attended)\b/g, '')
+    .replace(/\b(half day|halfday|haf day|half|1\/2 day)\b/g, '')
+    .replace(/\b(off|holiday|leave|week off|day off)\b/g, '')
     .trim();
 
   if (!namesSection) {
-    showToast(`🎤 Detected "${targetStatus}", but please specify caller names (e.g. "Mark absent for Rajesh")`, 'error');
+    showToast(`🎤 Detected "${targetStatus}", please say name (e.g. "Mark absent for Rajesh")`, 'error');
     return;
   }
 
-  // 3. Split names by delimiters like commas, "and", "&"
-  const rawNamesList = namesSection.split(/,| and | & |\+/).map(s => s.trim()).filter(Boolean);
+  // 3. Split spoken names by delimiters like commas, "and", "&", "also", "then"
+  const rawNamesList = namesSection.split(/,| and | & |\+| also | then /).map(s => s.trim()).filter(Boolean);
 
   const markedNames = [];
   const unmatchedQueries = [];
 
   rawNamesList.forEach(query => {
-    const matchedEmp = state.records.find(emp => {
+    let bestMatch = null;
+    let highestScore = 0;
+
+    const normQuery = normalizePhonetic(query);
+
+    state.records.forEach(emp => {
       const empName = emp.name.toLowerCase();
       const empId = emp.employeeId.toLowerCase();
+      const normEmpName = normalizePhonetic(emp.name);
+      const normEmpId = normalizePhonetic(emp.employeeId);
 
-      if (empName.includes(query) || empId.includes(query)) return true;
+      // A. Direct substring match (highest priority)
+      if (empName.includes(query) || empId.includes(query) || normEmpName.includes(normQuery) || normEmpId.includes(normQuery)) {
+        if (1.0 > highestScore) {
+          highestScore = 1.0;
+          bestMatch = emp;
+        }
+        return;
+      }
 
-      // Word token match (e.g. "Rajesh" matching "Rajesh Dhabbakuti")
+      // B. Token word match (e.g. spoken "Rajesh" matching "Rajesh Dhabbakuti")
       const queryTokens = query.split(' ');
-      return queryTokens.some(token => token.length > 2 && (empName.includes(token) || empId.includes(token)));
+      const empNameTokens = empName.split(' ');
+
+      for (const qToken of queryTokens) {
+        if (qToken.length < 3) continue;
+        const normQToken = normalizePhonetic(qToken);
+
+        for (const eToken of empNameTokens) {
+          const normEToken = normalizePhonetic(eToken);
+
+          if (normEToken.includes(normQToken) || normQToken.includes(normEToken)) {
+            const score = 0.9;
+            if (score > highestScore) {
+              highestScore = score;
+              bestMatch = emp;
+            }
+          } else {
+            const sim = getLevenshteinSimilarity(normQToken, normEToken);
+            if (sim >= 0.65 && sim > highestScore) {
+              highestScore = sim;
+              bestMatch = emp;
+            }
+          }
+        }
+      }
+
+      // C. Whole name fuzzy Levenshtein match
+      const wholeSim = getLevenshteinSimilarity(query, emp.name);
+      if (wholeSim >= 0.6 && wholeSim > highestScore) {
+        highestScore = wholeSim;
+        bestMatch = emp;
+      }
     });
 
-    if (matchedEmp) {
-      handleMarkAttendance(matchedEmp.employeeId, targetStatus);
-      markedNames.push(matchedEmp.name);
+    if (bestMatch && highestScore >= 0.6) {
+      handleMarkAttendance(bestMatch.employeeId, targetStatus);
+      markedNames.push(bestMatch.name);
     } else {
       unmatchedQueries.push(query);
     }
   });
 
   if (markedNames.length > 0) {
-    showToast(`🎤 Voice Success: Marked ${targetStatus} for ${markedNames.join(', ')}`, 'success');
+    showToast(`🎤 Voice Marked ${targetStatus} for: ${markedNames.join(', ')}`, 'success');
   }
 
   if (unmatchedQueries.length > 0) {
-    showToast(`🎤 Could not find callers for: "${unmatchedQueries.join(', ')}"`, 'error');
+    showToast(`🎤 Could not match caller: "${unmatchedQueries.join(', ')}"`, 'error');
   }
 }
 
