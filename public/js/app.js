@@ -11,7 +11,10 @@ const state = {
   isWeekend: false,
   records: [],
   searchQuery: '',
-  activeTab: 'All'
+  activeTab: 'All',
+  autoPresentCountdown: 60,
+  autoPresentIntervalId: null,
+  timerTargetDate: null
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -388,11 +391,11 @@ async function handleMarkAttendance(employeeId, status) {
 
     showToast(`Marked ${status} for ${rec ? rec.name : employeeId}`, 'success');
 
-    // Auto-mark remaining unmarked as Present if marking Absent/HalfDay/Off
+    // Start or reset 1-minute timer to auto-mark remaining callers as Present!
     if (status === 'Absent' || status === 'Half Day' || status === 'Holiday / Off') {
       const hasUnmarked = state.records.some(r => r.status === 'Unmarked');
       if (hasUnmarked && !state.isWeekend) {
-        autoMarkUnmarkedPresent(date);
+        startAutoPresentTimer(date, status);
       }
     }
   } catch (err) {
@@ -401,18 +404,75 @@ async function handleMarkAttendance(employeeId, status) {
   }
 }
 
-async function autoMarkUnmarkedPresent(date) {
+function startAutoPresentTimer(date, statusName = '') {
+  // Clear any existing timer interval
+  if (state.autoPresentIntervalId) {
+    clearInterval(state.autoPresentIntervalId);
+    state.autoPresentIntervalId = null;
+  }
+
+  state.autoPresentCountdown = 60;
+  state.timerTargetDate = date;
+
+  const banner = document.getElementById('autoPresentTimerBanner');
+  const secBadge = document.getElementById('timerCountdownSec');
+  if (banner) banner.style.display = 'flex';
+  if (secBadge) secBadge.textContent = '60s';
+
+  showToast(`Marked ${statusName || 'leave'}. 1-minute timer started (60s) to mark remaining as Present.`, 'info');
+
+  state.autoPresentIntervalId = setInterval(() => {
+    state.autoPresentCountdown -= 1;
+    const currentSecBadge = document.getElementById('timerCountdownSec');
+    if (currentSecBadge) currentSecBadge.textContent = `${state.autoPresentCountdown}s`;
+
+    if (state.autoPresentCountdown <= 0) {
+      triggerAutoPresentNow();
+    }
+  }, 1000);
+}
+
+async function triggerAutoPresentNow() {
+  const targetDate = state.timerTargetDate || state.selectedDate;
+  cancelAutoPresentTimer(false);
+
+  showToast('Timer finished: Auto-marking remaining callers as Present...', 'success');
+  await handleAutoPresentRemainingForDate(targetDate);
+}
+
+function cancelAutoPresentTimer(showNotice = true) {
+  if (state.autoPresentIntervalId) {
+    clearInterval(state.autoPresentIntervalId);
+    state.autoPresentIntervalId = null;
+  }
+  const banner = document.getElementById('autoPresentTimerBanner');
+  if (banner) banner.style.display = 'none';
+
+  if (showNotice) {
+    showToast('Auto-present 1-minute timer cancelled', 'info');
+  }
+}
+
+async function handleAutoPresentRemainingForDate(date) {
   try {
     const res = await fetch(`${API_BASE}/attendance/auto-present-remaining`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ date })
     });
-    if (res.ok) {
+
+    const data = await res.json();
+    if (!res.ok) {
+      showToast('Auto-mark failed', 'error');
+      return;
+    }
+
+    showToast(data.message || `Auto-marked remaining callers as Present for ${date}`, 'success');
+    if (state.selectedDate === date) {
       fetchAttendanceForDate();
     }
   } catch (err) {
-    // silent fallback
+    showToast('Error auto-marking remaining', 'error');
   }
 }
 

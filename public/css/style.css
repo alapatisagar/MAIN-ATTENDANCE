@@ -572,6 +572,109 @@ body {
   color: var(--yellow-bright);
 }
 
+/* 1-Minute Auto-Present Countdown Banner Styling */
+.timer-banner {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.22), rgba(17, 24, 39, 0.95));
+  border: 1.5px solid var(--yellow-bright);
+  border-radius: var(--radius-lg);
+  padding: 16px 24px;
+  margin-bottom: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  box-shadow: var(--shadow-glow-yellow);
+  animation: pulseGlow 2s infinite ease-in-out;
+  flex-wrap: wrap;
+}
+
+@keyframes pulseGlow {
+  0% { box-shadow: 0 0 15px rgba(245, 158, 11, 0.3); }
+  50% { box-shadow: 0 0 30px rgba(245, 158, 11, 0.6); }
+  100% { box-shadow: 0 0 15px rgba(245, 158, 11, 0.3); }
+}
+
+.timer-banner-content {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.timer-icon {
+  font-size: 1.8rem;
+}
+
+.timer-text {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.92rem;
+}
+
+.timer-text strong {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  color: #FFF;
+}
+
+.timer-sec-badge {
+  background: var(--yellow-bright);
+  color: #0B0F19;
+  font-weight: 900;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.6);
+}
+
+.timer-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.btn-timer-now {
+  background: linear-gradient(135deg, var(--green-primary), var(--green-bright));
+  color: #FFF;
+  font-weight: 800;
+  font-size: 0.85rem;
+  border: none;
+  padding: 10px 18px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
+  transition: all 0.2s ease;
+}
+
+.btn-timer-now:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.1);
+}
+
+.btn-timer-cancel {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+  font-weight: 700;
+  font-size: 0.85rem;
+  padding: 10px 16px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+}
+
+.btn-timer-cancel:hover {
+  background: rgba(239, 68, 68, 0.2);
+  color: var(--red-bright);
+  border-color: var(--red-border);
+}
+
 /* =========================================================
    4. STATS GRID CARDS (VIBRANT & COLORFUL)
    ========================================================= */

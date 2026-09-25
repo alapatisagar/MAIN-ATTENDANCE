@@ -179,6 +179,25 @@
         </div>
       </div>
 
+      <!-- 1-Minute Auto-Present Countdown Banner -->
+      <div id="autoPresentTimerBanner" class="timer-banner" style="display: none;">
+        <div class="timer-banner-content">
+          <div class="timer-icon"><i class="fa-solid fa-stopwatch text-yellow fa-spin-pulse"></i></div>
+          <div class="timer-text">
+            <strong>1-Minute Auto-Present Timer Active</strong>
+            <span>Marking all remaining callers as <strong class="text-yellow">PRESENT</strong> in <span id="timerCountdownSec" class="timer-sec-badge">60s</span> (gives 1 min to mark all absentees/leaves).</span>
+          </div>
+        </div>
+        <div class="timer-banner-actions">
+          <button type="button" class="btn-timer-now" onclick="triggerAutoPresentNow()">
+            <i class="fa-solid fa-circle-check"></i> Mark Present Now
+          </button>
+          <button type="button" class="btn-timer-cancel" onclick="cancelAutoPresentTimer()">
+            <i class="fa-solid fa-xmark"></i> Cancel Timer
+          </button>
+        </div>
+      </div>
+
       <!-- Main Employees Attendance Roster Table -->
       <div class="table-card">
         <div class="table-header-wrap">
