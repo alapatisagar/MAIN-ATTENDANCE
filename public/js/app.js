@@ -33,9 +33,19 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
+function getTodayIsoString() {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 function initApp() {
-  const today = new Date().toISOString().split('T')[0];
+  const today = getTodayIsoString();
   const currentMonth = today.substring(0, 7);
+
+  state.selectedDate = today;
 
   const dateInput = document.getElementById('selectedDateInput');
   if (dateInput) dateInput.value = today;
@@ -48,6 +58,7 @@ function initApp() {
   state.token = null;
   localStorage.removeItem('arcallers_user');
   localStorage.removeItem('arcallers_token');
+  sessionStorage.removeItem('arcallers_active_date');
 
   showWelcomeScreen();
 }
@@ -72,12 +83,13 @@ function showAppScreen() {
     if (avatar) avatar.textContent = getInitials(user.name);
   }
 
-  const savedActiveDate = sessionStorage.getItem('arcallers_active_date');
-  if (savedActiveDate) {
-    state.selectedDate = savedActiveDate;
-    const dateInput = document.getElementById('selectedDateInput');
-    if (dateInput) dateInput.value = savedActiveDate;
-  }
+  // ALWAYS display TODAY / PRESENT DATE on login
+  const todayStr = getTodayIsoString();
+  state.selectedDate = todayStr;
+  sessionStorage.removeItem('arcallers_active_date');
+
+  const dateInput = document.getElementById('selectedDateInput');
+  if (dateInput) dateInput.value = todayStr;
 
   fetchAttendanceForDate();
 }
