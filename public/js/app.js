@@ -751,11 +751,9 @@ function toggleVoiceRecognition() {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
   if (!SpeechRecognition) {
-    showToast('Voice recognition not supported in this browser. Please use Google Chrome or Microsoft Edge.', 'error');
+    showToast('Voice recognition is not supported in this browser. Please use Google Chrome or Microsoft Edge.', 'error');
     return;
   }
-
-  const micBtn = document.getElementById('voiceMicBtn');
 
   if (isVoiceListening && speechRecognitionObj) {
     speechRecognitionObj.stop();
@@ -765,42 +763,86 @@ function toggleVoiceRecognition() {
   try {
     speechRecognitionObj = new SpeechRecognition();
     speechRecognitionObj.continuous = false;
-    speechRecognitionObj.interimResults = false;
-    // Set to Indian English (en-IN) for accurate Indian accent & name recognition
-    speechRecognitionObj.lang = 'en-IN';
+    speechRecognitionObj.interimResults = true; // Live real-time speech feedback
+
+    try {
+      speechRecognitionObj.lang = 'en-IN';
+    } catch (e) {
+      speechRecognitionObj.lang = 'en-US';
+    }
 
     speechRecognitionObj.onstart = () => {
       isVoiceListening = true;
-      if (micBtn) micBtn.classList.add('listening');
-      showToast('🎤 Listening (Indian English)... Speak e.g. "Mark absent for Rajesh, Durga and Siva"', 'success');
+      updateVoiceUI(true, 'Listening... Speak e.g., "Mark Rajesh Absent" or "Mark remaining present"');
+      showToast('🎤 Voice Active! Speak e.g. "Mark Rajesh Absent"', 'success');
     };
 
     speechRecognitionObj.onend = () => {
       isVoiceListening = false;
-      if (micBtn) micBtn.classList.remove('listening');
+      updateVoiceUI(false);
     };
 
     speechRecognitionObj.onerror = (event) => {
       isVoiceListening = false;
-      if (micBtn) micBtn.classList.remove('listening');
-      if (event.error !== 'no-speech') {
+      updateVoiceUI(false);
+      if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+        showToast('Microphone access denied. Please allow microphone permissions in your browser address bar.', 'error');
+      } else if (event.error !== 'no-speech') {
         showToast(`Voice error: ${event.error}`, 'error');
       }
     };
 
     speechRecognitionObj.onresult = (event) => {
-      const transcript = event.results[0][0].transcript.trim();
-      if (!transcript) return;
+      let interimTranscript = '';
+      let finalTranscript = '';
 
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        if (event.results[i].isFinal) {
+          finalTranscript += event.results[i][0].transcript;
+        } else {
+          interimTranscript += event.results[i][0].transcript;
+        }
+      }
+
+      const liveText = (finalTranscript || interimTranscript).trim();
       const searchInput = document.getElementById('searchEmployeeInput');
-      if (searchInput) searchInput.value = transcript;
+      if (searchInput && liveText) {
+        searchInput.value = liveText;
+      }
 
-      handleVoiceCommandProcess(transcript);
+      if (liveText) {
+        updateVoiceUI(true, `Hearing: "${liveText}"`);
+      }
+
+      if (finalTranscript) {
+        handleVoiceCommandProcess(finalTranscript.trim());
+      }
     };
 
     speechRecognitionObj.start();
   } catch (err) {
-    showToast('Could not access microphone. Please grant browser permission.', 'error');
+    updateVoiceUI(false);
+    showToast('Could not start microphone. Please check browser permissions.', 'error');
+  }
+}
+
+function updateVoiceUI(active, message = '') {
+  const micBtn = document.getElementById('voiceMicBtn');
+  const banner = document.getElementById('voiceBanner');
+  const bannerText = document.getElementById('voiceBannerText');
+
+  if (micBtn) {
+    if (active) micBtn.classList.add('listening');
+    else micBtn.classList.remove('listening');
+  }
+
+  if (banner) {
+    if (active) {
+      banner.style.display = 'flex';
+      if (bannerText && message) bannerText.textContent = message;
+    } else {
+      banner.style.display = 'none';
+    }
   }
 }
 
