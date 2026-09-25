@@ -95,10 +95,13 @@
             </div>
           </div>
 
-          <!-- Search Filter -->
+          <!-- Search Filter & Voice Command -->
           <div class="control-group search-group">
             <i class="fa-solid fa-magnifying-glass search-icon"></i>
-            <input type="text" id="searchEmployeeInput" class="form-control-search" placeholder="Search by Employee Name or DBS ID..." oninput="handleSearchInput()">
+            <input type="text" id="searchEmployeeInput" class="form-control-search" placeholder="Search or Voice Command (e.g. 'Mark Rajesh Absent')..." oninput="handleSearchInput()">
+            <button type="button" class="btn-voice-mic" id="voiceMicBtn" onclick="toggleVoiceRecognition()" title="Voice Command: Click and speak (e.g. 'Mark Rajesh Absent')">
+              <i class="fa-solid fa-microphone"></i>
+            </button>
           </div>
 
           <!-- Action Buttons -->
@@ -120,9 +123,6 @@
             </button>
             <button type="button" class="btn-ghost-sm" onclick="handleMarkAll('Holiday / Off')" title="Mark entire day as Holiday / Off">
               <i class="fa-solid fa-umbrella-beach text-blue"></i> Mark Day as Off
-            </button>
-            <button type="button" class="btn-ghost-sm" onclick="handleAutoPresentRemaining()" title="Automatically mark remaining unmarked employees as Present">
-              <i class="fa-solid fa-wand-magic-sparkles text-yellow"></i> Auto-Mark Remaining Present
             </button>
           </div>
         </div>
@@ -176,25 +176,6 @@
             <span class="stat-value" id="statRate">0%</span>
             <span class="stat-label">Attendance Rate</span>
           </div>
-        </div>
-      </div>
-
-      <!-- 1-Minute Auto-Present Countdown Banner -->
-      <div id="autoPresentTimerBanner" class="timer-banner" style="display: none;">
-        <div class="timer-banner-content">
-          <div class="timer-icon"><i class="fa-solid fa-stopwatch text-yellow fa-spin-pulse"></i></div>
-          <div class="timer-text">
-            <strong>1-Minute Auto-Present Timer Active</strong>
-            <span>Marking all remaining callers as <strong class="text-yellow">PRESENT</strong> in <span id="timerCountdownSec" class="timer-sec-badge">60s</span> (gives 1 min to mark all absentees/leaves).</span>
-          </div>
-        </div>
-        <div class="timer-banner-actions">
-          <button type="button" class="btn-timer-now" onclick="triggerAutoPresentNow()">
-            <i class="fa-solid fa-circle-check"></i> Mark Present Now
-          </button>
-          <button type="button" class="btn-timer-cancel" onclick="cancelAutoPresentTimer()">
-            <i class="fa-solid fa-xmark"></i> Cancel Timer
-          </button>
         </div>
       </div>
 

@@ -455,7 +455,7 @@ app.get('/api/attendance', (req, res) => {
   const records = targetEmps.map(emp => {
     const att = (db.attendance || []).find(a => a.employeeId === emp.id && a.date === targetDate);
     
-    let status = att ? att.status : (isWeekend ? 'Holiday / Off' : 'Unmarked');
+    let status = att ? att.status : 'Unmarked';
 
     return {
       employeeId: emp.id,
@@ -464,7 +464,7 @@ app.get('/api/attendance', (req, res) => {
       avatarColor: emp.avatarColor,
       date: targetDate,
       status,
-      notes: att ? (att.notes || '') : (isWeekend ? 'Weekend Off' : '')
+      notes: att ? (att.notes || '') : ''
     };
   });
 

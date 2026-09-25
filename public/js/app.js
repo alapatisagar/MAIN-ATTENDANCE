@@ -174,26 +174,49 @@ function handleDateChange() {
 }
 
 function changeDateByOffset(offsetDays) {
-  const currentDate = new Date(state.selectedDate + 'T00:00:00');
-  currentDate.setDate(currentDate.getDate() + offsetDays);
-  const newDateStr = currentDate.toISOString().split('T')[0];
+  const dateInput = document.getElementById('selectedDateInput');
+  const currentStr = (dateInput && dateInput.value) ? dateInput.value : state.selectedDate;
+
+  if (!currentStr) return;
+
+  const parts = currentStr.split('-');
+  if (parts.length !== 3) return;
+
+  const y = parseInt(parts[0], 10);
+  const m = parseInt(parts[1], 10) - 1;
+  const d = parseInt(parts[2], 10);
+
+  const dateObj = new Date(y, m, d + offsetDays);
+
+  const resY = dateObj.getFullYear();
+  const resM = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const resD = String(dateObj.getDate()).padStart(2, '0');
+  const newDateStr = `${resY}-${resM}-${resD}`;
+
   state.selectedDate = newDateStr;
   sessionStorage.setItem('arcallers_active_date', newDateStr);
-  const dateInput = document.getElementById('selectedDateInput');
+
   if (dateInput) dateInput.value = newDateStr;
+
   fetchAttendanceForDate();
 }
 
 function jumpToDate(target) {
-  const d = new Date();
+  const dateObj = new Date();
   if (target === 'yesterday') {
-    d.setDate(d.getDate() - 1);
+    dateObj.setDate(dateObj.getDate() - 1);
   }
-  const dateStr = d.toISOString().split('T')[0];
+  const resY = dateObj.getFullYear();
+  const resM = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const resD = String(dateObj.getDate()).padStart(2, '0');
+  const dateStr = `${resY}-${resM}-${resD}`;
+
   state.selectedDate = dateStr;
   sessionStorage.setItem('arcallers_active_date', dateStr);
+
   const dateInput = document.getElementById('selectedDateInput');
   if (dateInput) dateInput.value = dateStr;
+
   fetchAttendanceForDate();
 }
 
@@ -224,9 +247,15 @@ function formatUSDate(dateStr) {
 
 async function fetchAttendanceForDate() {
   const date = state.selectedDate;
+  const parts = date.split('-');
+  if (parts.length !== 3) return;
 
-  const dateObj = new Date(date + 'T00:00:00');
-  const usDateNum = formatUSDate(date);
+  const y = parseInt(parts[0], 10);
+  const m = parseInt(parts[1], 10) - 1;
+  const d = parseInt(parts[2], 10);
+
+  const dateObj = new Date(y, m, d);
+  const usDateNum = `${parts[1]}/${parts[2]}/${parts[0]}`;
   const formattedDate = dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
   const dayOfWeek = dateObj.getDay();
   const isWeekend = (dayOfWeek === 0 || dayOfWeek === 6);
@@ -390,111 +419,9 @@ async function handleMarkAttendance(employeeId, status) {
     }
 
     showToast(`Marked ${status} for ${rec ? rec.name : employeeId}`, 'success');
-
-    // Start or reset 1-minute timer to auto-mark remaining callers as Present!
-    if (status === 'Absent' || status === 'Half Day' || status === 'Holiday / Off') {
-      const hasUnmarked = state.records.some(r => r.status === 'Unmarked');
-      if (hasUnmarked && !state.isWeekend) {
-        startAutoPresentTimer(date, status);
-      }
-    }
   } catch (err) {
     showToast('Network error marking attendance', 'error');
     fetchAttendanceForDate();
-  }
-}
-
-function startAutoPresentTimer(date, statusName = '') {
-  // Clear any existing timer interval
-  if (state.autoPresentIntervalId) {
-    clearInterval(state.autoPresentIntervalId);
-    state.autoPresentIntervalId = null;
-  }
-
-  state.autoPresentCountdown = 60;
-  state.timerTargetDate = date;
-
-  const banner = document.getElementById('autoPresentTimerBanner');
-  const secBadge = document.getElementById('timerCountdownSec');
-  if (banner) banner.style.display = 'flex';
-  if (secBadge) secBadge.textContent = '60s';
-
-  showToast(`Marked ${statusName || 'leave'}. 1-minute timer started (60s) to mark remaining as Present.`, 'info');
-
-  state.autoPresentIntervalId = setInterval(() => {
-    state.autoPresentCountdown -= 1;
-    const currentSecBadge = document.getElementById('timerCountdownSec');
-    if (currentSecBadge) currentSecBadge.textContent = `${state.autoPresentCountdown}s`;
-
-    if (state.autoPresentCountdown <= 0) {
-      triggerAutoPresentNow();
-    }
-  }, 1000);
-}
-
-async function triggerAutoPresentNow() {
-  const targetDate = state.timerTargetDate || state.selectedDate;
-  cancelAutoPresentTimer(false);
-
-  showToast('Timer finished: Auto-marking remaining callers as Present...', 'success');
-  await handleAutoPresentRemainingForDate(targetDate);
-}
-
-function cancelAutoPresentTimer(showNotice = true) {
-  if (state.autoPresentIntervalId) {
-    clearInterval(state.autoPresentIntervalId);
-    state.autoPresentIntervalId = null;
-  }
-  const banner = document.getElementById('autoPresentTimerBanner');
-  if (banner) banner.style.display = 'none';
-
-  if (showNotice) {
-    showToast('Auto-present 1-minute timer cancelled', 'info');
-  }
-}
-
-async function handleAutoPresentRemainingForDate(date) {
-  try {
-    const res = await fetch(`${API_BASE}/attendance/auto-present-remaining`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ date })
-    });
-
-    const data = await res.json();
-    if (!res.ok) {
-      showToast('Auto-mark failed', 'error');
-      return;
-    }
-
-    showToast(data.message || `Auto-marked remaining callers as Present for ${date}`, 'success');
-    if (state.selectedDate === date) {
-      fetchAttendanceForDate();
-    }
-  } catch (err) {
-    showToast('Error auto-marking remaining', 'error');
-  }
-}
-
-async function handleAutoPresentRemaining() {
-  const date = state.selectedDate;
-  try {
-    const res = await fetch(`${API_BASE}/attendance/auto-present-remaining`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ date })
-    });
-
-    const data = await res.json();
-    if (!res.ok) {
-      showToast('Auto-mark failed', 'error');
-      return;
-    }
-
-    showToast(data.message || `Auto-marked remaining as Present`, 'success');
-    fetchAttendanceForDate();
-  } catch (err) {
-    showToast('Error auto-marking remaining', 'error');
   }
 }
 
@@ -813,3 +740,147 @@ function onCalendarMonthYearChange() {
   if (yearSelect) calendarState.viewYear = parseInt(yearSelect.value, 10);
   renderCalendarWidget();
 }
+
+/* ---------------------------------------------------------
+   7. VOICE COMMAND RECOGNITION (WEB SPEECH API)
+   --------------------------------------------------------- */
+let speechRecognitionObj = null;
+let isVoiceListening = false;
+
+function toggleVoiceRecognition() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+  if (!SpeechRecognition) {
+    showToast('Voice recognition not supported in this browser. Please use Google Chrome or Microsoft Edge.', 'error');
+    return;
+  }
+
+  const micBtn = document.getElementById('voiceMicBtn');
+
+  if (isVoiceListening && speechRecognitionObj) {
+    speechRecognitionObj.stop();
+    return;
+  }
+
+  try {
+    speechRecognitionObj = new SpeechRecognition();
+    speechRecognitionObj.continuous = false;
+    speechRecognitionObj.interimResults = false;
+    speechRecognitionObj.lang = 'en-US';
+
+    speechRecognitionObj.onstart = () => {
+      isVoiceListening = true;
+      if (micBtn) micBtn.classList.add('listening');
+      showToast('🎤 Voice Active! Speak e.g., "Mark absent for Rajesh, Durga, and Siva"', 'success');
+    };
+
+    speechRecognitionObj.onend = () => {
+      isVoiceListening = false;
+      if (micBtn) micBtn.classList.remove('listening');
+    };
+
+    speechRecognitionObj.onerror = (event) => {
+      isVoiceListening = false;
+      if (micBtn) micBtn.classList.remove('listening');
+      if (event.error !== 'no-speech') {
+        showToast(`Voice microphone error: ${event.error}`, 'error');
+      }
+    };
+
+    speechRecognitionObj.onresult = (event) => {
+      const transcript = event.results[0][0].transcript.trim();
+      if (!transcript) return;
+
+      const searchInput = document.getElementById('searchEmployeeInput');
+      if (searchInput) searchInput.value = transcript;
+
+      handleVoiceCommandProcess(transcript);
+    };
+
+    speechRecognitionObj.start();
+  } catch (err) {
+    showToast('Could not access microphone. Please grant permission.', 'error');
+  }
+}
+
+function handleVoiceCommandProcess(transcript) {
+  const rawText = transcript.toLowerCase();
+
+  // 1. Detect target attendance status
+  let targetStatus = null;
+  if (rawText.includes('absent')) {
+    targetStatus = 'Absent';
+  } else if (rawText.includes('present')) {
+    targetStatus = 'Present';
+  } else if (rawText.includes('half day') || rawText.includes('halfday') || rawText.includes('half')) {
+    targetStatus = 'Half Day';
+  } else if (rawText.includes('off') || rawText.includes('holiday') || rawText.includes('leave')) {
+    targetStatus = 'Holiday / Off';
+  }
+
+  // If no status command detected, fallback to search mode
+  if (!targetStatus) {
+    handleSearchInput();
+    showToast(`🎤 Voice Search: Filtered for "${transcript}"`, 'success');
+    return;
+  }
+
+  // 2. Strip status & command keywords to isolate employee names
+  let namesSection = rawText
+    .replace(/\bmark\b/g, '')
+    .replace(/\bas\b/g, '')
+    .replace(/\bfor\b/g, '')
+    .replace(/\babsent\b/g, '')
+    .replace(/\bpresent\b/g, '')
+    .replace(/\bhalf day\b/g, '')
+    .replace(/\bhalfday\b/g, '')
+    .replace(/\bhalf\b/g, '')
+    .replace(/\boff\b/g, '')
+    .replace(/\bholiday\b/g, '')
+    .replace(/\bleave\b/g, '')
+    .replace(/\bemployee\b/g, '')
+    .replace(/\bemployees\b/g, '')
+    .replace(/\bcaller\b/g, '')
+    .replace(/\bcallers\b/g, '')
+    .trim();
+
+  if (!namesSection) {
+    showToast(`🎤 Detected "${targetStatus}", but please specify caller names (e.g. "Mark absent for Rajesh")`, 'error');
+    return;
+  }
+
+  // 3. Split names by delimiters like commas, "and", "&"
+  const rawNamesList = namesSection.split(/,| and | & |\+/).map(s => s.trim()).filter(Boolean);
+
+  const markedNames = [];
+  const unmatchedQueries = [];
+
+  rawNamesList.forEach(query => {
+    const matchedEmp = state.records.find(emp => {
+      const empName = emp.name.toLowerCase();
+      const empId = emp.employeeId.toLowerCase();
+
+      if (empName.includes(query) || empId.includes(query)) return true;
+
+      // Word token match (e.g. "Rajesh" matching "Rajesh Dhabbakuti")
+      const queryTokens = query.split(' ');
+      return queryTokens.some(token => token.length > 2 && (empName.includes(token) || empId.includes(token)));
+    });
+
+    if (matchedEmp) {
+      handleMarkAttendance(matchedEmp.employeeId, targetStatus);
+      markedNames.push(matchedEmp.name);
+    } else {
+      unmatchedQueries.push(query);
+    }
+  });
+
+  if (markedNames.length > 0) {
+    showToast(`🎤 Voice Success: Marked ${targetStatus} for ${markedNames.join(', ')}`, 'success');
+  }
+
+  if (unmatchedQueries.length > 0) {
+    showToast(`🎤 Could not find callers for: "${unmatchedQueries.join(', ')}"`, 'error');
+  }
+}
+
