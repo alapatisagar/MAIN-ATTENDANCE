@@ -1105,30 +1105,58 @@ function handleShareDailySummary() {
   const total = state.records.length;
   let present = 0, absent = 0, halfDay = 0, off = 0;
 
+  const absentList = [];
+  const halfDayList = [];
+  const offList = [];
+
   state.records.forEach(r => {
-    if (r.status === 'Present') present++;
-    else if (r.status === 'Absent') absent++;
-    else if (r.status === 'Half Day') halfDay++;
-    else if (r.status === 'Holiday / Off' || r.status === 'On Leave') off++;
+    if (r.status === 'Present') {
+      present++;
+    } else if (r.status === 'Absent') {
+      absent++;
+      absentList.push(r.name);
+    } else if (r.status === 'Half Day') {
+      halfDay++;
+      halfDayList.push(r.name);
+    } else if (r.status === 'Holiday / Off' || r.status === 'On Leave') {
+      off++;
+      offList.push(r.name);
+    }
   });
 
   const markedWork = present + absent + halfDay;
   const rate = markedWork > 0 ? Math.round(((present + (halfDay * 0.5)) / markedWork) * 100) : 0;
 
-  const msg = `*AR Callers Attendance Summary (${dateStr})*\n` +
+  let msg = `*AR CALLERS ATTENDANCE REPORT (${dateStr})*\n\n` +
+    `📊 *SUMMARY STATS*\n` +
     `• Total Callers: ${total}\n` +
     `• Present: ${present}\n` +
     `• Absent: ${absent}\n` +
     `• Half Day: ${halfDay}\n` +
     `• Holiday / Off: ${off}\n` +
-    `• Attendance Rate: ${rate}%\n\n` +
-    `_Generated via AR Callers Portal_`;
+    `• Attendance Rate: ${rate}%\n`;
+
+  if (absentList.length > 0) {
+    msg += `\n❌ *ABSENT CALLERS (${absentList.length})*:\n` + absentList.map(n => `  - ${n}`).join('\n') + `\n`;
+  } else {
+    msg += `\n✅ *ABSENT CALLERS*: None (100% Attendance)\n`;
+  }
+
+  if (halfDayList.length > 0) {
+    msg += `\n⏱️ *HALF DAY CALLERS (${halfDayList.length})*:\n` + halfDayList.map(n => `  - ${n}`).join('\n') + `\n`;
+  }
+
+  if (offList.length > 0 && offList.length < total) {
+    msg += `\n🏖️ *HOLIDAY / OFF CALLERS (${offList.length})*:\n` + offList.map(n => `  - ${n}`).join('\n') + `\n`;
+  }
+
+  msg += `\n_Generated via AR Callers Portal_`;
 
   const encodedMsg = encodeURIComponent(msg);
   const waUrl = `https://wa.me/?text=${encodedMsg}`;
 
   window.open(waUrl, '_blank');
-  showToast('Opening WhatsApp Daily Summary share link...', 'success');
+  showToast('Opening WhatsApp Daily Summary share link with absent callers list...', 'success');
 }
 
 function toggleVoiceAudioFeedback() {
