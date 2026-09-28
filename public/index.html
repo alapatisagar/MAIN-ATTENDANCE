@@ -543,41 +543,42 @@
        MODAL 8: EMAIL BACKUP SETTINGS MODAL
        ========================================================= -->
   <div class="modal-overlay" id="email-settings-modal">
-    <div class="modal-card modal-md" style="max-width: 680px; width: 95vw;">
+    <div class="modal-card modal-md" style="max-width: 680px; width: 95vw; max-height: 90vh; display: flex; flex-direction: column; overflow: hidden;">
       <div class="modal-header">
         <h3><i class="fa-solid fa-envelope text-yellow"></i> Daily Email Backup & Automation Settings</h3>
         <button class="modal-close" onclick="closeModal('email-settings-modal')">&times;</button>
       </div>
-      <div class="modal-body" style="padding: 20px 24px;">
-        
-        <!-- Status & Target Email Header Card -->
-        <div class="admin-list-card mb-3 p-3" style="background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.25); border-radius: 10px;">
-          <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
-            <div>
-              <span style="font-size: 0.82rem; color: #94a3b8; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Target Delivery Address</span>
-              <div style="font-size: 1.1rem; font-weight: 800; color: #f59e0b; font-family: var(--font-display);">sagaralapati3695@gmail.com</div>
+
+      <form id="emailSettingsForm" onsubmit="handleSaveEmailSettings(event)" style="display: flex; flex-direction: column; flex: 1; overflow: hidden; margin: 0;">
+        <div class="modal-body" style="padding: 20px 24px; overflow-y: auto; flex: 1;">
+          
+          <!-- Status & Target Email Header Card -->
+          <div class="admin-list-card mb-3 p-3" style="background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.25); border-radius: 10px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+              <div>
+                <span style="font-size: 0.82rem; color: #94a3b8; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Target Delivery Address</span>
+                <div style="font-size: 1.1rem; font-weight: 800; color: #f59e0b; font-family: var(--font-display);">sagaralapati3695@gmail.com</div>
+              </div>
+              <button type="button" class="btn-primary-yellow" id="btnTestSendEmail" onclick="triggerSendTestEmail()" style="padding: 10px 18px; font-size: 0.88rem;">
+                <i class="fa-solid fa-paper-plane"></i> Send Test Email Now
+              </button>
             </div>
-            <button type="button" class="btn-primary-yellow" id="btnTestSendEmail" onclick="triggerSendTestEmail()" style="padding: 10px 18px; font-size: 0.88rem;">
-              <i class="fa-solid fa-paper-plane"></i> Send Test Email Now
-            </button>
+
+            <div id="emailStatusBox" class="mt-2 pt-2" style="border-top: 1px dashed rgba(245, 158, 11, 0.2); display: none;">
+              <span style="font-size: 0.82rem; color: #94a3b8; font-weight: 700;"><i class="fa-solid fa-clock text-blue"></i> Last Dispatch Status:</span>
+              <div id="emailStatusText" style="font-size: 0.88rem; font-weight: 700; margin-top: 2px;">No emails sent yet</div>
+            </div>
           </div>
 
-          <div id="emailStatusBox" class="mt-2 pt-2" style="border-top: 1px dashed rgba(245, 158, 11, 0.2); display: none;">
-            <span style="font-size: 0.82rem; color: #94a3b8; font-weight: 700;"><i class="fa-solid fa-clock text-blue"></i> Last Dispatch Status:</span>
-            <div id="emailStatusText" style="font-size: 0.88rem; font-weight: 700; margin-top: 2px;">No emails sent yet</div>
+          <!-- Gmail 1-Time Activation & Spam Notice Box -->
+          <div class="admin-list-card mb-3 p-3" style="background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.25); border-radius: 10px;">
+            <h5 class="mb-1 text-blue" style="font-size: 0.92rem; font-weight: 800;"><i class="fa-solid fa-circle-exclamation text-blue"></i> First-Time Email Delivery & Spam Check:</h5>
+            <p class="m-0 text-muted" style="font-size: 0.84rem; line-height: 1.45;">
+              When you send your test email, please check your Gmail <strong>Inbox</strong>, <strong>Spam / Junk</strong> folder, and <strong>Promotions</strong> tab. If you see a 1-time activation email titled <em>"Confirm your form submission"</em>, click <strong>Activate Form</strong> once. Future daily emails will deliver automatically to your inbox!
+            </p>
           </div>
-        </div>
 
-        <!-- Gmail 1-Time Activation & Spam Notice Box -->
-        <div class="admin-list-card mb-3 p-3" style="background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.25); border-radius: 10px;">
-          <h5 class="mb-1 text-blue" style="font-size: 0.92rem; font-weight: 800;"><i class="fa-solid fa-circle-exclamation text-blue"></i> First-Time Email Delivery & Spam Check:</h5>
-          <p class="m-0 text-muted" style="font-size: 0.84rem; line-height: 1.45;">
-            When you send your test email, please check your Gmail <strong>Inbox</strong>, <strong>Spam / Junk</strong> folder, and <strong>Promotions</strong> tab. If you see a 1-time activation email titled <em>"Confirm your form submission"</em>, click <strong>Activate Form</strong> once. Future daily emails will deliver automatically to your inbox!
-          </p>
-        </div>
-
-        <!-- Form for Gmail App Password & Settings -->
-        <form id="emailSettingsForm" onsubmit="handleSaveEmailSettings(event)">
+          <!-- Form Fields -->
           <div class="form-group mb-3">
             <label for="settingRecipientEmail"><i class="fa-solid fa-at text-yellow"></i> Recipient Email Address *</label>
             <input type="email" id="settingRecipientEmail" class="form-control" value="sagaralapati3695@gmail.com" required>
@@ -603,25 +604,24 @@
             </ol>
           </div>
 
-          <!-- Hidden advanced SMTP inputs for form compatibility -->
           <input type="hidden" id="settingSmtpHost" value="smtp.gmail.com">
           <input type="hidden" id="settingSmtpPort" value="587">
+        </div>
 
-          <div style="padding: 14px 0 0 0; background: transparent; border-top: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;">
-            <button type="button" class="btn-ghost-sm" onclick="handleDownloadBackup()"><i class="fa-solid fa-download text-yellow"></i> Download Backup JSON Directly</button>
-            <div style="display: flex; gap: 8px;">
-              <button type="button" class="btn-ghost" onclick="closeModal('email-settings-modal')">Close</button>
-              <button type="submit" class="btn-primary-yellow"><i class="fa-solid fa-floppy-disk"></i> Save Settings</button>
-            </div>
+        <div class="modal-footer" style="padding: 16px 24px; background: rgba(10, 14, 23, 0.98); border-top: 1.5px solid var(--yellow-border); display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; flex-shrink: 0;">
+          <button type="button" class="btn-ghost-sm" onclick="handleDownloadBackup()"><i class="fa-solid fa-download text-yellow"></i> Download Backup JSON Directly</button>
+          <div style="display: flex; gap: 10px; align-items: center;">
+            <button type="button" class="btn-ghost" onclick="closeModal('email-settings-modal')">Close</button>
+            <button type="submit" class="btn-primary-yellow"><i class="fa-solid fa-floppy-disk"></i> Save Settings</button>
           </div>
-        </form>
-      </div>
+        </div>
+      </form>
     </div>
   </div>
 
   <!-- Toast Notification Container -->
   <div id="toastContainer" class="toast-container"></div>
 
-  <script src="js/app.js?v=20260929_v6"></script>
+  <script src="js/app.js?v=20260929_v7"></script>
 </body>
 </html>

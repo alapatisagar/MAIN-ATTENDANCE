@@ -569,6 +569,16 @@ app.put('/api/employees/:id', (req, res) => {
   res.json({ success: true, message: 'Employee updated successfully', employee: emp });
 });
 
+function ipv4Lookup(hostname, options, callback) {
+  if (typeof options === 'function') {
+    callback = options;
+    options = {};
+  }
+  options = options || {};
+  options.family = 4;
+  return dns.lookup(hostname, options, callback);
+}
+
 // 4c. Email Backup Helper & Automatic Scheduler
 const BACKUP_RECIPIENT_EMAIL = 'sagaralapati3695@gmail.com';
 let lastEmailBackupDate = null;
@@ -613,6 +623,7 @@ async function sendEmailBackup(recipientOverride = null) {
     async function attemptMailSend(transporterOptions) {
       const transporter = nodemailer.createTransport({
         ...transporterOptions,
+        lookup: ipv4Lookup,
         family: 4, // Force IPv4 to resolve ENETUNREACH IPv6 routing errors on Render
         connectionTimeout: 8000,
         greetingTimeout: 8000,
