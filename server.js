@@ -7,6 +7,12 @@ const crypto = require('crypto');
 const ExcelJS = require('exceljs');
 const compression = require('compression');
 const nodemailer = require('nodemailer');
+const dns = require('dns');
+
+// Force IPv4 first for DNS lookup on cloud platforms like Render to prevent ENETUNREACH IPv6 errors
+if (dns.setDefaultResultOrder) {
+  dns.setDefaultResultOrder('ipv4first');
+}
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -555,6 +561,7 @@ async function sendEmailBackup(recipientOverride = null) {
     async function attemptMailSend(transporterOptions) {
       const transporter = nodemailer.createTransport({
         ...transporterOptions,
+        family: 4, // Force IPv4 to resolve ENETUNREACH IPv6 routing errors on Render
         connectionTimeout: 8000,
         greetingTimeout: 8000,
         socketTimeout: 10000
