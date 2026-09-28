@@ -588,6 +588,7 @@ async function loadEmailSettingsIntoModal() {
     const recipientInput = document.getElementById('settingRecipientEmail');
     const hostInput = document.getElementById('settingSmtpHost');
     const portInput = document.getElementById('settingSmtpPort');
+    const passInput = document.getElementById('settingSmtpPass');
     const badge = document.getElementById('smtpPassConfiguredBadge');
     const statusBox = document.getElementById('emailStatusBox');
     const statusText = document.getElementById('emailStatusText');
@@ -595,6 +596,13 @@ async function loadEmailSettingsIntoModal() {
     if (recipientInput) recipientInput.value = data.recipientEmail || 'sagaralapati3695@gmail.com';
     if (hostInput) hostInput.value = data.smtpHost || 'smtp.gmail.com';
     if (portInput) portInput.value = data.smtpPort || 587;
+    if (passInput) {
+      if (data.hasPassword) {
+        passInput.placeholder = "App Password saved (leave blank to keep current)";
+      } else {
+        passInput.placeholder = "Enter Gmail App Password (e.g. abcd efgh ijkl mnop)";
+      }
+    }
 
     if (badge) {
       badge.style.display = data.hasPassword ? 'block' : 'none';

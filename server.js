@@ -533,7 +533,8 @@ async function sendEmailBackup(recipientOverride = null) {
   const mailBody = `Hello Sagar Alapati,\n\nAttached is your automated daily attendance backup for the AR Callers Attendance Portal.\n\nBackup Summary (${todayStr}):\n- Total AR Callers: ${empCount}\n- Total Attendance Records: ${attCount}\n- Date Generated: ${new Date().toLocaleString()}\n\nThis file can be directly imported into your Portal anytime using the "Import Backup File" option.\n\nBest regards,\nAR Callers Attendance Portal System`;
 
   const smtpUser = settings.smtpUser || process.env.SMTP_USER || process.env.GMAIL_USER || 'sagaralapati3695@gmail.com';
-  const smtpPass = settings.smtpPass || process.env.SMTP_PASS || process.env.GMAIL_PASS || process.env.GMAIL_APP_PASSWORD || '';
+  const rawPass = settings.smtpPass || process.env.SMTP_PASS || process.env.GMAIL_PASS || process.env.GMAIL_APP_PASSWORD || '';
+  const smtpPass = String(rawPass).replace(/\s+/g, '').trim();
   const smtpHost = settings.smtpHost || process.env.SMTP_HOST || 'smtp.gmail.com';
   const smtpPort = parseInt(settings.smtpPort || process.env.SMTP_PORT || '587', 10);
 
@@ -549,18 +550,32 @@ async function sendEmailBackup(recipientOverride = null) {
     };
   }
 
-  const transporter = nodemailer.createTransport({
-    host: smtpHost,
-    port: smtpPort,
-    secure: smtpPort === 465,
-    auth: {
-      user: smtpUser,
-      pass: smtpPass
-    },
-    tls: {
-      rejectUnauthorized: false
-    }
-  });
+  // Create transporter (Use service: 'gmail' for Gmail, or host/port for custom SMTP)
+  let transportOptions;
+  if (smtpHost === 'smtp.gmail.com' || smtpHost === 'gmail') {
+    transportOptions = {
+      service: 'gmail',
+      auth: {
+        user: smtpUser,
+        pass: smtpPass
+      }
+    };
+  } else {
+    transportOptions = {
+      host: smtpHost,
+      port: smtpPort,
+      secure: smtpPort === 465,
+      auth: {
+        user: smtpUser,
+        pass: smtpPass
+      },
+      tls: {
+        rejectUnauthorized: false
+      }
+    };
+  }
+
+  const transporter = nodemailer.createTransport(transportOptions);
 
   const info = await transporter.sendMail({
     from: `"AR Callers Attendance Portal" <${smtpUser}>`,
@@ -616,12 +631,13 @@ setInterval(async () => {
 app.get('/api/admin/email-settings', (req, res) => {
   const db = loadDB();
   const settings = (db.settings && db.settings.email) ? db.settings.email : {};
+  const currentPass = settings.smtpPass || process.env.GMAIL_APP_PASSWORD || process.env.SMTP_PASS || '';
   res.json({
     recipientEmail: settings.recipientEmail || 'sagaralapati3695@gmail.com',
     smtpHost: settings.smtpHost || 'smtp.gmail.com',
     smtpPort: settings.smtpPort || 587,
     smtpUser: settings.smtpUser || 'sagaralapati3695@gmail.com',
-    hasPassword: !!(settings.smtpPass || process.env.GMAIL_APP_PASSWORD || process.env.SMTP_PASS),
+    hasPassword: !!currentPass,
     autoBackupEnabled: settings.autoBackupEnabled !== false,
     lastSentAt: settings.lastSentAt || null,
     lastStatus: settings.lastStatus || null
@@ -640,9 +656,13 @@ app.put('/api/admin/email-settings', (req, res) => {
   if (smtpHost) db.settings.email.smtpHost = smtpHost.trim();
   if (smtpPort) db.settings.email.smtpPort = parseInt(smtpPort, 10);
   if (smtpUser) db.settings.email.smtpUser = smtpUser.trim();
+  
   if (typeof smtpPass === 'string' && smtpPass.trim() !== '') {
-    db.settings.email.smtpPass = smtpPass.trim();
+    // Automatically remove spaces from 16-letter Gmail app passwords
+    const sanitizedPass = smtpPass.trim().replace(/\s+/g, '');
+    db.settings.email.smtpPass = sanitizedPass;
   }
+  
   if (typeof autoBackupEnabled === 'boolean') {
     db.settings.email.autoBackupEnabled = autoBackupEnabled;
   }
@@ -650,13 +670,13 @@ app.put('/api/admin/email-settings', (req, res) => {
   saveDB(db);
   res.json({
     success: true,
-    message: 'Email settings updated successfully!',
+    message: 'Email settings updated and saved successfully!',
     settings: {
       recipientEmail: db.settings.email.recipientEmail,
       smtpHost: db.settings.email.smtpHost,
       smtpPort: db.settings.email.smtpPort,
       smtpUser: db.settings.email.smtpUser,
-      hasPassword: !!(db.settings.email.smtpPass || process.env.GMAIL_APP_PASSWORD || process.env.SMTP_PASS),
+      hasPassword: !!db.settings.email.smtpPass,
       autoBackupEnabled: db.settings.email.autoBackupEnabled
     }
   });
