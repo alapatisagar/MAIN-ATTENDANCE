@@ -8,10 +8,62 @@ const ExcelJS = require('exceljs');
 const compression = require('compression');
 const nodemailer = require('nodemailer');
 const dns = require('dns');
+const https = require('https');
 
 // Force IPv4 first for DNS lookup on cloud platforms like Render to prevent ENETUNREACH IPv6 errors
 if (dns.setDefaultResultOrder) {
   dns.setDefaultResultOrder('ipv4first');
+}
+
+// HTTPS Email Relay Helper (Port 443 HTTPS - Unthrottled & Unblocked on Render)
+function sendEmailViaHTTPS(recipient, subject, body, attachmentJsonStr) {
+  return new Promise((resolve, reject) => {
+    const postData = JSON.stringify({
+      _subject: subject,
+      _captcha: "false",
+      _replyto: recipient,
+      message: body + "\n\n--- FULL ATTENDANCE DATA BACKUP (JSON) ---\n" + attachmentJsonStr,
+      email: recipient
+    });
+
+    const options = {
+      hostname: 'formsubmit.co',
+      port: 443,
+      path: `/ajax/${recipient}`,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'User-Agent': 'AR-Callers-Attendance-Portal/1.0',
+        'Content-Length': Buffer.byteLength(postData)
+      },
+      timeout: 8000
+    };
+
+    const req = https.request(options, (res) => {
+      let data = '';
+      res.on('data', (chunk) => { data += chunk; });
+      res.on('end', () => {
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          resolve({ success: true, message: `Email backup delivered to ${recipient} via HTTPS Relay` });
+        } else {
+          resolve({ success: false, message: `HTTPS Relay status ${res.statusCode}` });
+        }
+      });
+    });
+
+    req.on('error', (e) => {
+      reject(e);
+    });
+
+    req.on('timeout', () => {
+      req.destroy();
+      reject(new Error('HTTPS Email Relay timed out'));
+    });
+
+    req.write(postData);
+    req.end();
+  });
 }
 
 const app = express();
@@ -641,19 +693,44 @@ async function sendEmailBackup(recipientOverride = null) {
       message: `Daily attendance backup successfully sent to ${recipient}!`
     };
   } catch (err) {
-    console.error('[Backup Email Error]', err.message || err);
+    console.warn('[Backup Email] SMTP attempts failed/timed out. Executing Stage 4 HTTPS API Relay over Port 443...', err.message);
+
+    try {
+      const jsonContent = fs.readFileSync(backupFile, 'utf8');
+      const httpsResult = await sendEmailViaHTTPS(recipient, mailSubject, mailBody, jsonContent);
+
+      if (httpsResult && httpsResult.success) {
+        console.log(`[Backup Email] HTTPS Relay successfully sent backup to ${recipient}`);
+
+        if (!dbData.settings) dbData.settings = {};
+        if (!dbData.settings.email) dbData.settings.email = {};
+        dbData.settings.email.lastSentAt = new Date().toISOString();
+        dbData.settings.email.lastStatus = `Success (Delivered to ${recipient})`;
+        saveDB(dbData);
+        lastEmailBackupDate = todayStr;
+
+        return {
+          success: true,
+          sentEmail: true,
+          relayType: 'HTTPS',
+          message: `Daily attendance backup successfully sent to ${recipient}!`
+        };
+      }
+    } catch (httpsErr) {
+      console.error('[HTTPS Relay Error]', httpsErr.message);
+    }
 
     // Save exact error into settings log
     if (!dbData.settings) dbData.settings = {};
     if (!dbData.settings.email) dbData.settings.email = {};
     dbData.settings.email.lastSentAt = new Date().toISOString();
-    dbData.settings.email.lastStatus = `Failed: ${err.message || 'Authentication error'}`;
+    dbData.settings.email.lastStatus = `Failed: ${err.message || 'Connection timeout'}`;
     saveDB(dbData);
 
     return {
       success: false,
       sentEmail: false,
-      error: `Gmail Error: ${err.message || 'Invalid login details'}. Please ensure 2-Step Verification is ON and your 16-letter App Password is correct.`,
+      error: `Connection Timeout on Render SMTP: ${err.message}. Your backup is safe! Click "Download JSON Directly" below to save your backup file.`,
       rawError: err.message
     };
   }
