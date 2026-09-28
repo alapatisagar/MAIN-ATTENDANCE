@@ -17,7 +17,7 @@ if (dns.setDefaultResultOrder) {
 
 // HTTPS Email Relay Helper (Port 443 HTTPS - Unthrottled & Unblocked on Render)
 function sendEmailViaHTTPS(recipient, subject, body, attachmentJsonStr) {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     const postData = JSON.stringify({
       _subject: subject,
       _captcha: "false",
@@ -37,7 +37,7 @@ function sendEmailViaHTTPS(recipient, subject, body, attachmentJsonStr) {
         'User-Agent': 'AR-Callers-Attendance-Portal/1.0',
         'Content-Length': Buffer.byteLength(postData)
       },
-      timeout: 8000
+      timeout: 10000
     };
 
     const req = https.request(options, (res) => {
@@ -47,18 +47,18 @@ function sendEmailViaHTTPS(recipient, subject, body, attachmentJsonStr) {
         if (res.statusCode >= 200 && res.statusCode < 300) {
           resolve({ success: true, message: `Email backup delivered to ${recipient} via HTTPS Relay` });
         } else {
-          resolve({ success: false, message: `HTTPS Relay status ${res.statusCode}` });
+          resolve({ success: false, message: `HTTPS Relay returned HTTP status ${res.statusCode}` });
         }
       });
     });
 
     req.on('error', (e) => {
-      reject(e);
+      resolve({ success: false, message: e.message || 'HTTPS Relay connection failed' });
     });
 
     req.on('timeout', () => {
       req.destroy();
-      reject(new Error('HTTPS Email Relay timed out'));
+      resolve({ success: false, message: 'HTTPS Email Relay request timed out' });
     });
 
     req.write(postData);
@@ -576,7 +576,22 @@ function ipv4Lookup(hostname, options, callback) {
   }
   options = options || {};
   options.family = 4;
-  return dns.lookup(hostname, options, callback);
+  return dns.lookup(hostname, options, (err, address, family) => {
+    if (err) return callback(err);
+    callback(null, address, 4);
+  });
+}
+
+async function resolveGmailIPv4s() {
+  return new Promise((resolve) => {
+    dns.resolve4('smtp.gmail.com', (err, addresses) => {
+      if (!err && Array.isArray(addresses) && addresses.length > 0) {
+        resolve(addresses);
+      } else {
+        resolve([]);
+      }
+    });
+  });
 }
 
 // 4c. Email Backup Helper & Automatic Scheduler
@@ -619,12 +634,11 @@ async function sendEmailBackup(recipientOverride = null) {
   }
 
   try {
-    // Helper to send mail with explicit timeout & port fallback
     async function attemptMailSend(transporterOptions) {
       const transporter = nodemailer.createTransport({
         ...transporterOptions,
         lookup: ipv4Lookup,
-        family: 4, // Force IPv4 to resolve ENETUNREACH IPv6 routing errors on Render
+        family: 4,
         connectionTimeout: 8000,
         greetingTimeout: 8000,
         socketTimeout: 10000
@@ -647,7 +661,6 @@ async function sendEmailBackup(recipientOverride = null) {
     let info = null;
 
     if (smtpHost && smtpHost !== 'smtp.gmail.com' && smtpHost !== 'gmail') {
-      // Custom SMTP settings entered by user
       info = await attemptMailSend({
         host: smtpHost,
         port: smtpPort,
@@ -656,40 +669,74 @@ async function sendEmailBackup(recipientOverride = null) {
         tls: { rejectUnauthorized: false }
       });
     } else {
-      // 3-Stage Gmail Fallback Strategy for Render Cloud Compatibility
-      try {
-        // Stage 1: Direct SSL Port 465 (Fastest on Render)
-        info = await attemptMailSend({
-          host: 'smtp.gmail.com',
-          port: 465,
-          secure: true,
-          auth: { user: smtpUser, pass: smtpPass }
-        });
-      } catch (err1) {
-        console.warn('[Backup Email] Port 465 failed, trying Port 587...', err1.message);
+      const resolvedIPv4s = await resolveGmailIPv4s();
+      console.log('[Backup Email] Resolved smtp.gmail.com IPv4 addresses:', resolvedIPv4s);
+
+      let sendSuccess = false;
+
+      // Stage 1 & 2: Direct IPv4 sockets
+      for (const ip of resolvedIPv4s) {
+        if (sendSuccess) break;
         try {
-          // Stage 2: Port 587 STARTTLS
+          console.log(`[Backup Email] Trying IPv4 ${ip}:465 SSL...`);
+          info = await attemptMailSend({
+            host: ip,
+            port: 465,
+            secure: true,
+            auth: { user: smtpUser, pass: smtpPass },
+            tls: { servername: 'smtp.gmail.com', rejectUnauthorized: false }
+          });
+          sendSuccess = true;
+        } catch (ipErr1) {
+          console.warn(`[Backup Email] IPv4 ${ip}:465 failed:`, ipErr1.message);
+          try {
+            console.log(`[Backup Email] Trying IPv4 ${ip}:587 STARTTLS...`);
+            info = await attemptMailSend({
+              host: ip,
+              port: 587,
+              secure: false,
+              auth: { user: smtpUser, pass: smtpPass },
+              tls: { servername: 'smtp.gmail.com', rejectUnauthorized: false }
+            });
+            sendSuccess = true;
+          } catch (ipErr2) {
+            console.warn(`[Backup Email] IPv4 ${ip}:587 failed:`, ipErr2.message);
+          }
+        }
+      }
+
+      // Stage 3: Standard hostname fallback with ipv4Lookup
+      if (!sendSuccess) {
+        try {
+          console.log('[Backup Email] Trying smtp.gmail.com:465 standard...');
           info = await attemptMailSend({
             host: 'smtp.gmail.com',
-            port: 587,
-            secure: false,
-            auth: { user: smtpUser, pass: smtpPass },
-            tls: { rejectUnauthorized: false }
-          });
-        } catch (err2) {
-          console.warn('[Backup Email] Port 587 failed, trying service gmail...', err2.message);
-          // Stage 3: Service Gmail
-          info = await attemptMailSend({
-            service: 'gmail',
+            port: 465,
+            secure: true,
             auth: { user: smtpUser, pass: smtpPass }
           });
+          sendSuccess = true;
+        } catch (err1) {
+          console.warn('[Backup Email] Standard 465 failed, trying service gmail...', err1.message);
+          try {
+            info = await attemptMailSend({
+              service: 'gmail',
+              auth: { user: smtpUser, pass: smtpPass }
+            });
+            sendSuccess = true;
+          } catch (err2) {
+            console.warn('[Backup Email] Service gmail failed:', err2.message);
+          }
         }
+      }
+
+      if (!sendSuccess || !info) {
+        throw new Error('Direct Gmail SMTP connection timed out across all IPv4 ports.');
       }
     }
 
     console.log(`[Backup Email] Backup successfully sent to ${recipient}: ${info.messageId}`);
 
-    // Log status in settings
     if (!dbData.settings) dbData.settings = {};
     if (!dbData.settings.email) dbData.settings.email = {};
     dbData.settings.email.lastSentAt = new Date().toISOString();
@@ -704,7 +751,7 @@ async function sendEmailBackup(recipientOverride = null) {
       message: `Daily attendance backup successfully sent to ${recipient}!`
     };
   } catch (err) {
-    console.warn('[Backup Email] SMTP attempts failed/timed out. Executing Stage 4 HTTPS API Relay over Port 443...', err.message);
+    console.warn('[Backup Email] Direct SMTP failed. Attempting Stage 4 HTTPS Relay over Port 443...', err.message);
 
     try {
       const jsonContent = fs.readFileSync(backupFile, 'utf8');
@@ -716,7 +763,7 @@ async function sendEmailBackup(recipientOverride = null) {
         if (!dbData.settings) dbData.settings = {};
         if (!dbData.settings.email) dbData.settings.email = {};
         dbData.settings.email.lastSentAt = new Date().toISOString();
-        dbData.settings.email.lastStatus = `Success (Delivered to ${recipient})`;
+        dbData.settings.email.lastStatus = `Success (Delivered to ${recipient} via HTTPS Relay)`;
         saveDB(dbData);
         lastEmailBackupDate = todayStr;
 
@@ -724,24 +771,25 @@ async function sendEmailBackup(recipientOverride = null) {
           success: true,
           sentEmail: true,
           relayType: 'HTTPS',
-          message: `Daily attendance backup successfully sent to ${recipient}!`
+          message: `Daily attendance backup successfully sent to ${recipient} via HTTPS Relay!`
         };
+      } else {
+        console.warn('[Backup Email] HTTPS Relay notice:', httpsResult.message);
       }
     } catch (httpsErr) {
       console.error('[HTTPS Relay Error]', httpsErr.message);
     }
 
-    // Save exact error into settings log
     if (!dbData.settings) dbData.settings = {};
     if (!dbData.settings.email) dbData.settings.email = {};
     dbData.settings.email.lastSentAt = new Date().toISOString();
-    dbData.settings.email.lastStatus = `Failed: ${err.message || 'Connection timeout'}`;
+    dbData.settings.email.lastStatus = `Notice: SMTP blocked by cloud host (${err.message}). Local backup saved.`;
     saveDB(dbData);
 
     return {
       success: false,
       sentEmail: false,
-      error: `Connection Timeout on Render SMTP: ${err.message}. Your backup is safe! Click "Download JSON Directly" below to save your backup file.`,
+      error: `Cloud Host Connection Issue: ${err.message}. Click "Download JSON Directly" below to save your backup file.`,
       rawError: err.message
     };
   }
