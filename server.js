@@ -551,45 +551,71 @@ async function sendEmailBackup(recipientOverride = null) {
   }
 
   try {
-    // Create transporter (Use service: 'gmail' for Gmail, or host/port for custom SMTP)
-    let transportOptions;
-    if (smtpHost === 'smtp.gmail.com' || smtpHost === 'gmail') {
-      transportOptions = {
-        service: 'gmail',
-        auth: {
-          user: smtpUser,
-          pass: smtpPass
-        }
-      };
-    } else {
-      transportOptions = {
+    // Helper to send mail with explicit timeout & port fallback
+    async function attemptMailSend(transporterOptions) {
+      const transporter = nodemailer.createTransport({
+        ...transporterOptions,
+        connectionTimeout: 8000,
+        greetingTimeout: 8000,
+        socketTimeout: 10000
+      });
+
+      return await transporter.sendMail({
+        from: `"AR Callers Attendance Portal" <${smtpUser}>`,
+        to: recipient,
+        subject: mailSubject,
+        text: mailBody,
+        attachments: [
+          {
+            filename: `AR_Callers_Attendance_Backup_${todayStr}.json`,
+            path: backupFile
+          }
+        ]
+      });
+    }
+
+    let info = null;
+
+    if (smtpHost && smtpHost !== 'smtp.gmail.com' && smtpHost !== 'gmail') {
+      // Custom SMTP settings entered by user
+      info = await attemptMailSend({
         host: smtpHost,
         port: smtpPort,
         secure: smtpPort === 465,
-        auth: {
-          user: smtpUser,
-          pass: smtpPass
-        },
-        tls: {
-          rejectUnauthorized: false
+        auth: { user: smtpUser, pass: smtpPass },
+        tls: { rejectUnauthorized: false }
+      });
+    } else {
+      // 3-Stage Gmail Fallback Strategy for Render Cloud Compatibility
+      try {
+        // Stage 1: Direct SSL Port 465 (Fastest on Render)
+        info = await attemptMailSend({
+          host: 'smtp.gmail.com',
+          port: 465,
+          secure: true,
+          auth: { user: smtpUser, pass: smtpPass }
+        });
+      } catch (err1) {
+        console.warn('[Backup Email] Port 465 failed, trying Port 587...', err1.message);
+        try {
+          // Stage 2: Port 587 STARTTLS
+          info = await attemptMailSend({
+            host: 'smtp.gmail.com',
+            port: 587,
+            secure: false,
+            auth: { user: smtpUser, pass: smtpPass },
+            tls: { rejectUnauthorized: false }
+          });
+        } catch (err2) {
+          console.warn('[Backup Email] Port 587 failed, trying service gmail...', err2.message);
+          // Stage 3: Service Gmail
+          info = await attemptMailSend({
+            service: 'gmail',
+            auth: { user: smtpUser, pass: smtpPass }
+          });
         }
-      };
+      }
     }
-
-    const transporter = nodemailer.createTransport(transportOptions);
-
-    const info = await transporter.sendMail({
-      from: `"AR Callers Attendance Portal" <${smtpUser}>`,
-      to: recipient,
-      subject: mailSubject,
-      text: mailBody,
-      attachments: [
-        {
-          filename: `AR_Callers_Attendance_Backup_${todayStr}.json`,
-          path: backupFile
-        }
-      ]
-    });
 
     console.log(`[Backup Email] Backup successfully sent to ${recipient}: ${info.messageId}`);
 
@@ -620,7 +646,7 @@ async function sendEmailBackup(recipientOverride = null) {
     return {
       success: false,
       sentEmail: false,
-      error: `Gmail Error: ${err.message || 'Invalid login details'}. Please make sure 2-Step Verification is ON and your 16-letter App Password is correct.`,
+      error: `Gmail Error: ${err.message || 'Invalid login details'}. Please ensure 2-Step Verification is ON and your 16-letter App Password is correct.`,
       rawError: err.message
     };
   }

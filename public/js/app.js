@@ -570,8 +570,20 @@ async function handleSendEmailBackup() {
 }
 
 async function triggerSendTestEmail() {
-  await handleSendEmailBackup();
-  await loadEmailSettingsIntoModal();
+  const btn = document.getElementById('btnTestSendEmail');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Sending Test Email...`;
+  }
+  try {
+    await handleSendEmailBackup();
+    await loadEmailSettingsIntoModal();
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = `<i class="fa-solid fa-paper-plane text-yellow"></i> Send Test Email Now`;
+    }
+  }
 }
 
 async function openEmailSettingsModal() {
