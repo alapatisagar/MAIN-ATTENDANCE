@@ -544,7 +544,82 @@ function handleExportMonthly(e) {
 
 function handleDownloadBackup() {
   showToast('Downloading full database backup JSON...', 'success');
-  window.location.href = `${API_BASE}/admin/backup-download`;
+  window.location.href = `${API_BASE}/backup/download`;
+}
+
+async function handleSendEmailBackup() {
+  showToast('Sending backup email to sagaralapati3695@gmail.com...', 'info');
+  try {
+    const res = await fetch(`${API_BASE}/backup/send-email`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'sagaralapati3695@gmail.com' })
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      showToast(data.message, 'success');
+    } else {
+      showToast(data.error || data.message || 'Failed to send email backup', 'error');
+    }
+  } catch (err) {
+    showToast('Error connecting to server for email backup', 'error');
+  }
+}
+
+async function handleImportBackupSubmit(event) {
+  event.preventDefault();
+  const fileInput = document.getElementById('backupFileInput');
+  if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
+    showToast('Please select a .json backup file first', 'error');
+    return;
+  }
+
+  const file = fileInput.files[0];
+  const submitBtn = document.getElementById('btnSubmitImport');
+  const statusBox = document.getElementById('importStatusBox');
+  const statusText = document.getElementById('importStatusText');
+
+  if (submitBtn) submitBtn.disabled = true;
+  if (statusBox) statusBox.style.display = 'block';
+  if (statusText) statusText.textContent = 'Reading backup file...';
+
+  const reader = new FileReader();
+  reader.onload = async function(e) {
+    try {
+      const jsonContent = JSON.parse(e.target.result);
+
+      if (statusText) statusText.textContent = 'Importing & merging data with database...';
+
+      const res = await fetch(`${API_BASE}/backup/import`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(jsonContent)
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showToast(data.message, 'success');
+        closeModal('import-backup-modal');
+        fileInput.value = '';
+        await fetchAttendanceForDate(state.selectedDate);
+      } else {
+        showToast(data.error || 'Failed to import backup file', 'error');
+      }
+    } catch (err) {
+      showToast('Invalid JSON file format. Please check the file content.', 'error');
+    } finally {
+      if (submitBtn) submitBtn.disabled = false;
+      if (statusBox) statusBox.style.display = 'none';
+    }
+  };
+
+  reader.onerror = function() {
+    showToast('Failed to read the backup file', 'error');
+    if (submitBtn) submitBtn.disabled = false;
+    if (statusBox) statusBox.style.display = 'none';
+  };
+
+  reader.readAsText(file);
 }
 
 async function openMonthlySummaryModal() {

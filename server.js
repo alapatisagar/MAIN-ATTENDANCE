@@ -6,13 +6,15 @@ const path = require('path');
 const crypto = require('crypto');
 const ExcelJS = require('exceljs');
 const compression = require('compression');
+const nodemailer = require('nodemailer');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(compression());
-app.use(bodyParser.json());
+app.use(bodyParser.json({ limit: '50mb' }));
+app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
 app.use(express.static(path.join(__dirname, 'public'), {
   maxAge: '1d',
   etag: true
@@ -503,8 +505,99 @@ app.put('/api/employees/:id', (req, res) => {
   res.json({ success: true, message: 'Employee updated successfully', employee: emp });
 });
 
-// 4c. Download Full Database JSON Backup
-app.get('/api/admin/backup-download', (req, res) => {
+// 4c. Email Backup Helper & Automatic Scheduler
+const BACKUP_RECIPIENT_EMAIL = 'sagaralapati3695@gmail.com';
+let lastEmailBackupDate = null;
+
+async function sendEmailBackup(recipient = BACKUP_RECIPIENT_EMAIL) {
+  const backupFile = MASTER_BACKUP_FILE;
+  if (!fs.existsSync(backupFile)) {
+    throw new Error('Master backup file not found');
+  }
+
+  const dbData = loadDB();
+  const todayStr = new Date().toISOString().split('T')[0];
+  const empCount = dbData.employees ? dbData.employees.length : 0;
+  const attCount = dbData.attendance ? dbData.attendance.length : 0;
+
+  const mailSubject = `[AR Callers Portal] Daily Attendance Backup - ${todayStr}`;
+  const mailBody = `Hello Sagar Alapati,\n\nAttached is your automated daily attendance backup for the AR Callers Attendance Portal.\n\nBackup Summary (${todayStr}):\n- Total AR Callers: ${empCount}\n- Total Attendance Records: ${attCount}\n- Date Generated: ${new Date().toLocaleString()}\n\nThis file can be directly imported into your Portal anytime using the "Import Backup File" option.\n\nBest regards,\nAR Callers Attendance Portal System`;
+
+  const smtpUser = process.env.SMTP_USER || process.env.GMAIL_USER || 'sagaralapati3695@gmail.com';
+  const smtpPass = process.env.SMTP_PASS || process.env.GMAIL_PASS || process.env.GMAIL_APP_PASSWORD || '';
+
+  if (!smtpPass) {
+    console.log(`[Backup Email] SMTP password not set in environment. Backup saved locally at ${backupFile}.`);
+    return {
+      success: true,
+      sentEmail: false,
+      message: `Daily attendance backup saved locally at ${backupFile}. To enable email delivery to ${recipient}, set GMAIL_APP_PASSWORD in Render Environment variables.`,
+      recipient,
+      backupFile
+    };
+  }
+
+  const transporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST || 'smtp.gmail.com',
+    port: parseInt(process.env.SMTP_PORT || '587', 10),
+    secure: process.env.SMTP_SECURE === 'true',
+    auth: {
+      user: smtpUser,
+      pass: smtpPass
+    }
+  });
+
+  const info = await transporter.sendMail({
+    from: `"AR Callers Attendance Portal" <${smtpUser}>`,
+    to: recipient,
+    subject: mailSubject,
+    text: mailBody,
+    attachments: [
+      {
+        filename: `AR_Callers_Attendance_Backup_${todayStr}.json`,
+        path: backupFile
+      }
+    ]
+  });
+
+  console.log(`[Backup Email] Backup successfully sent to ${recipient}: ${info.messageId}`);
+  lastEmailBackupDate = todayStr;
+  return {
+    success: true,
+    sentEmail: true,
+    messageId: info.messageId,
+    message: `Daily attendance backup successfully sent to ${recipient}`
+  };
+}
+
+// Automatic daily backup job checking every 6 hours
+setInterval(async () => {
+  try {
+    const todayStr = new Date().toISOString().split('T')[0];
+    if (lastEmailBackupDate !== todayStr) {
+      console.log(`[Auto Email Backup] Checking daily backup...`);
+      await sendEmailBackup(BACKUP_RECIPIENT_EMAIL);
+      lastEmailBackupDate = todayStr;
+    }
+  } catch (err) {
+    console.error('[Auto Email Backup Error]', err.message);
+  }
+}, 6 * 60 * 60 * 1000);
+
+// On-demand Email Backup Endpoints
+app.post(['/api/backup/send-email', '/api/admin/send-email-backup'], async (req, res) => {
+  try {
+    const recipient = req.body.email || BACKUP_RECIPIENT_EMAIL;
+    const result = await sendEmailBackup(recipient);
+    res.json(result);
+  } catch (err) {
+    console.error('Error sending email backup:', err);
+    res.status(500).json({ error: err.message || 'Failed to send email backup' });
+  }
+});
+
+// Download Full Database JSON Backup
+app.get(['/api/admin/backup-download', '/api/backup/download'], (req, res) => {
   const db = loadDB();
   const dateStr = new Date().toISOString().split('T')[0];
   const jsonContent = JSON.stringify(db, null, 2);
@@ -512,6 +605,77 @@ app.get('/api/admin/backup-download', (req, res) => {
   res.setHeader('Content-Type', 'application/json');
   res.setHeader('Content-Disposition', `attachment; filename=AR_Callers_DB_Backup_${dateStr}.json`);
   res.send(jsonContent);
+});
+
+// Import Backup File (.json) Endpoint
+app.post(['/api/backup/import', '/api/admin/import-backup'], (req, res) => {
+  try {
+    const importedData = req.body;
+
+    if (!importedData || typeof importedData !== 'object') {
+      return res.status(400).json({ error: 'Invalid JSON payload. Please select a valid backup JSON file.' });
+    }
+
+    if (!Array.isArray(importedData.attendance) && !Array.isArray(importedData.employees)) {
+      return res.status(400).json({ error: 'Invalid backup structure. File must contain "attendance" or "employees" array.' });
+    }
+
+    const currentDB = loadDB();
+    let newAttAdded = 0;
+    let attUpdated = 0;
+    let newEmpAdded = 0;
+
+    // 1. Merge Attendance Records safely (Never erase existing attendance records)
+    if (Array.isArray(importedData.attendance)) {
+      const attMap = new Map();
+      (currentDB.attendance || []).forEach(a => {
+        attMap.set(`${a.date}_${a.employeeId}`, a);
+      });
+
+      importedData.attendance.forEach(a => {
+        if (!a || !a.date || !a.employeeId) return;
+        const key = `${a.date}_${a.employeeId}`;
+        if (attMap.has(key)) {
+          attUpdated++;
+        } else {
+          newAttAdded++;
+        }
+        attMap.set(key, a);
+      });
+
+      currentDB.attendance = Array.from(attMap.values());
+    }
+
+    // 2. Merge Employees
+    if (Array.isArray(importedData.employees)) {
+      const empMap = new Map();
+      (currentDB.employees || []).forEach(e => empMap.set(e.id, e));
+
+      importedData.employees.forEach(e => {
+        if (!e || !e.id) return;
+        if (!empMap.has(e.id)) {
+          empMap.set(e.id, e);
+          newEmpAdded++;
+        }
+      });
+
+      currentDB.employees = Array.from(empMap.values());
+      sortNumerically(currentDB.employees);
+    }
+
+    // Save merged database to disk, master backup archive, and update RAM cache
+    saveDB(currentDB);
+
+    res.json({
+      success: true,
+      message: `Backup imported successfully! (${newAttAdded} new attendance records added, ${attUpdated} records updated, ${newEmpAdded} employees added). Total attendance records: ${currentDB.attendance.length}.`,
+      totalRecords: currentDB.attendance.length,
+      totalEmployees: currentDB.employees.length
+    });
+  } catch (err) {
+    console.error('Error importing backup file:', err);
+    res.status(500).json({ error: 'Failed to import backup file: ' + err.message });
+  }
 });
 
 // 5. Get Attendance Records for a Specific Date

@@ -128,6 +128,12 @@
             <button type="button" class="btn-ghost-sm" onclick="handleDownloadBackup()" title="Download full system database backup file">
               <i class="fa-solid fa-download text-yellow"></i> Backup DB
             </button>
+            <button type="button" class="btn-ghost-sm" onclick="handleSendEmailBackup()" title="Send immediate backup to sagaralapati3695@gmail.com">
+              <i class="fa-solid fa-envelope text-yellow"></i> Email Backup
+            </button>
+            <button type="button" class="btn-primary-yellow" onclick="openModal('import-backup-modal')" title="Import a .json backup file to restore records">
+              <i class="fa-solid fa-file-import"></i> Import Backup
+            </button>
             <button type="button" class="btn-ghost-sm" onclick="window.print()" title="Print current day attendance sheet">
               <i class="fa-solid fa-print"></i> Print Sheet
             </button>
@@ -423,7 +429,9 @@
         </div>
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn-primary-yellow" onclick="handleDownloadBackup()"><i class="fa-solid fa-download"></i> Download Full DB Backup</button>
+        <button type="button" class="btn-primary-yellow" onclick="handleDownloadBackup()"><i class="fa-solid fa-download"></i> Download DB</button>
+        <button type="button" class="btn-ghost-sm" onclick="handleSendEmailBackup()"><i class="fa-solid fa-envelope text-yellow"></i> Email Backup</button>
+        <button type="button" class="btn-ghost-sm" onclick="openModal('import-backup-modal')"><i class="fa-solid fa-file-import text-yellow"></i> Import Backup</button>
         <button type="button" class="btn-ghost" onclick="closeModal('admin-tools-modal')">Close</button>
       </div>
     </div>
@@ -492,6 +500,36 @@
         <button type="button" class="btn-date-shortcut" onclick="jumpToDate('today'); closeModal('calendar-picker-modal');">Jump to Today</button>
         <button type="button" class="btn-ghost" onclick="closeModal('calendar-picker-modal')">Close</button>
       </div>
+    </div>
+  </div>
+
+  <!-- =========================================================
+       MODAL 7: IMPORT BACKUP FILE MODAL
+       ========================================================= -->
+  <div class="modal-overlay" id="import-backup-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3><i class="fa-solid fa-file-import text-yellow"></i> Import Backup File (.json)</h3>
+        <button class="modal-close" onclick="closeModal('import-backup-modal')">&times;</button>
+      </div>
+      <form id="importBackupForm" onsubmit="handleImportBackupSubmit(event)">
+        <div class="modal-body">
+          <p class="text-muted mb-3">Select a JSON backup file (received via email or downloaded from portal) to restore historical attendance and employee records. Existing data will be safely merged and protected against deletion.</p>
+          
+          <div class="form-group mb-3">
+            <label for="backupFileInput"><i class="fa-solid fa-file-code text-yellow"></i> Select .json Backup File *</label>
+            <input type="file" id="backupFileInput" accept=".json,application/json" class="form-control" required>
+          </div>
+          
+          <div id="importStatusBox" class="health-item mt-2" style="display: none;">
+            <span id="importStatusText" class="health-val text-yellow">Processing backup file...</span>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-ghost" onclick="closeModal('import-backup-modal')">Cancel</button>
+          <button type="submit" class="btn-primary-yellow" id="btnSubmitImport"><i class="fa-solid fa-upload"></i> Upload & Import Backup</button>
+        </div>
+      </form>
     </div>
   </div>
 
