@@ -5,13 +5,18 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const ExcelJS = require('exceljs');
+const compression = require('compression');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(cors());
+app.use(compression());
 app.use(bodyParser.json());
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public'), {
+  maxAge: '1d',
+  etag: true
+}));
 
 // Security Headers
 app.use((req, res, next) => {
@@ -175,6 +180,8 @@ function restoreFromBackup() {
   return null;
 }
 
+let cachedDB = null;
+
 function saveDB(data) {
   if (!data) return;
 
@@ -200,6 +207,8 @@ function saveDB(data) {
     } catch (e) {}
   }
 
+  cachedDB = data;
+
   const jsonStr = JSON.stringify(data, null, 2);
 
   // Write to primary database, master permanent archive, and daily snapshot
@@ -213,7 +222,10 @@ function saveDB(data) {
   } catch (e) {}
 }
 
-function loadDB() {
+function loadDB(forceReload = false) {
+  if (cachedDB && !forceReload) {
+    return cachedDB;
+  }
   let db = null;
 
   if (fs.existsSync(DB_FILE)) {

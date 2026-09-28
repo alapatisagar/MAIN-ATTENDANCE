@@ -957,9 +957,9 @@ function getLevenshteinSimilarity(s1, s2) {
 function handleVoiceCommandProcess(transcript) {
   const rawText = transcript.toLowerCase();
 
-  // Check if this is a bulk "mark remaining" voice command
-  // e.g. "mark remaining all present", "mark rest present", "mark remaining callers present", "mark remaining absent"
-  const isRemainingCommand = /\b(remaining|rest|others|other)\b/.test(rawText);
+  // Check if this is a bulk "mark all / remaining" voice command
+  // e.g. "mark present for all", "mark all present", "mark present all", "mark remaining callers present", "mark rest present", "mark everyone present"
+  const isRemainingCommand = /\b(all|everyone|remaining|rest|others|other)\b/.test(rawText);
 
   // 1. Detect target attendance status intent with Indian English variations
   let targetStatus = null;
@@ -973,7 +973,7 @@ function handleVoiceCommandProcess(transcript) {
     targetStatus = 'Holiday / Off';
   }
 
-  // Handle "mark remaining all present" or "mark remaining callers present"
+  // Handle bulk command for unmarked callers (preserving all existing Absent callers untouched)
   if (isRemainingCommand) {
     const statusToApply = targetStatus || 'Present';
     let count = 0;
