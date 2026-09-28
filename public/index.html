@@ -584,24 +584,38 @@
             <input type="email" id="settingRecipientEmail" class="form-control" value="sagaralapati3695@gmail.com" required>
           </div>
 
+          <!-- Recommended Option: Google Apps Script Web App Relay for Render -->
+          <div class="form-group mb-3">
+            <label for="settingWebAppUrl" style="color: #38bdf8;">
+              <i class="fa-solid fa-link text-blue"></i> Google Apps Script Web App URL
+              <span class="badge bg-primary ml-1" style="font-size: 0.72rem; padding: 2px 6px;">RECOMMENDED FOR RENDER</span>
+            </label>
+            <input type="url" id="settingWebAppUrl" class="form-control" placeholder="https://script.google.com/macros/s/AKfycb.../exec" style="border-color: rgba(56, 189, 248, 0.4);">
+            <small id="webAppUrlConfiguredBadge" class="text-green mt-1" style="display: none; font-weight: 700;"><i class="fa-solid fa-check-circle"></i> Google Web App URL is active for automated HTTPS daily emails</small>
+          </div>
+
+          <!-- Quick Guide Accordion Box for Google Web App -->
+          <div class="admin-list-card mb-3 p-3" style="background: rgba(56, 189, 248, 0.06); border: 1px solid rgba(56, 189, 248, 0.2); border-radius: 8px;">
+            <h5 class="mb-2 text-blue" style="font-size: 0.88rem; font-weight: 800;"><i class="fa-solid fa-bolt text-yellow"></i> 1-Minute Setup: Free Automated Gmail Delivery on Render</h5>
+            <ol class="m-0 pl-3" style="font-size: 0.82rem; line-height: 1.5; color: #cbd5e1;">
+              <li>Go to <strong>script.google.com</strong> &rarr; Click <strong>New project</strong>.</li>
+              <li>Paste this code:
+                <div style="background: rgba(0,0,0,0.5); padding: 6px 10px; border-radius: 6px; font-family: monospace; font-size: 0.76rem; margin: 4px 0; color: #38bdf8;">
+                  function doPost(e){ var d=JSON.parse(e.postData.contents); var b=Utilities.newBlob(d.fileContent,"application/json",d.fileName); MailApp.sendEmail({to:d.recipient, subject:d.subject, body:d.body, attachments:[b]}); return ContentService.createTextOutput('{"success":true}').setMimeType(ContentService.MimeType.JSON); }
+                </div>
+              </li>
+              <li>Click <strong>Deploy</strong> &rarr; <strong>New deployment</strong> &rarr; Select <strong>Web app</strong> (Execute as: <em>Me</em>, Who has access: <em>Anyone</em>).</li>
+              <li>Copy the Web App URL, paste it into the box above, and click <strong>Save Settings</strong>!</li>
+            </ol>
+          </div>
+
           <div class="form-group mb-3">
             <label for="settingSmtpPass">
               <i class="fa-solid fa-key text-yellow"></i> Gmail App Password (16-letters)
-              <small class="text-muted">(Optional — for direct Gmail SMTP sending)</small>
+              <small class="text-muted">(For non-Render direct SMTP)</small>
             </label>
             <input type="password" id="settingSmtpPass" class="form-control" placeholder="Enter Gmail App Password (e.g. abcd efgh ijkl mnop)">
             <small id="smtpPassConfiguredBadge" class="text-green mt-1" style="display: none; font-weight: 700;"><i class="fa-solid fa-check-circle"></i> App Password is currently saved & active</small>
-          </div>
-
-          <!-- Quick Guide Accordion Box -->
-          <div class="admin-list-card mb-3 p-3" style="background: rgba(255,255,255,0.03); border-radius: 8px;">
-            <h5 class="mb-2" style="font-size: 0.88rem; font-weight: 800;"><i class="fa-solid fa-circle-info text-yellow"></i> How to get a Gmail App Password in 30 seconds:</h5>
-            <ol class="m-0 pl-3" style="font-size: 0.82rem; line-height: 1.5; color: #cbd5e1;">
-              <li>Go to <strong>Google Account</strong> (myaccount.google.com) &rarr; <strong>Security</strong>.</li>
-              <li>Ensure <strong>2-Step Verification</strong> is ON.</li>
-              <li>Search <strong>App passwords</strong> &rarr; Create app name <em>"Attendance Portal"</em>.</li>
-              <li>Copy the 16-letter code into the box above and click <strong>Save Settings</strong>.</li>
-            </ol>
           </div>
 
           <input type="hidden" id="settingSmtpHost" value="smtp.gmail.com">
@@ -622,6 +636,6 @@
   <!-- Toast Notification Container -->
   <div id="toastContainer" class="toast-container"></div>
 
-  <script src="js/app.js?v=20260929_v7"></script>
+  <script src="js/app.js?v=20260929_v8"></script>
 </body>
 </html>

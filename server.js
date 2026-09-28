@@ -66,6 +66,117 @@ function sendEmailViaHTTPS(recipient, subject, body, attachmentJsonStr) {
   });
 }
 
+// Google Apps Script Web App HTTPS Relay (Port 443 HTTPS - Free Gmail Dispatch on Cloud Hosts)
+function sendEmailViaGoogleScript(webAppUrl, recipient, subject, body, attachmentJsonStr, fileName) {
+  return new Promise((resolve) => {
+    const postData = JSON.stringify({
+      recipient: recipient,
+      subject: subject,
+      body: body,
+      fileName: fileName,
+      fileContent: attachmentJsonStr
+    });
+
+    function makeRequest(targetUrl, redirectsLeft = 3) {
+      if (redirectsLeft <= 0) {
+        return resolve({ success: false, message: 'Google Script Relay: Too many redirects' });
+      }
+
+      let parsedUrl;
+      try {
+        parsedUrl = new URL(targetUrl);
+      } catch (e) {
+        return resolve({ success: false, message: `Invalid Web App URL: ${targetUrl}` });
+      }
+
+      const options = {
+        hostname: parsedUrl.hostname,
+        port: 443,
+        path: parsedUrl.pathname + parsedUrl.search,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(postData)
+        },
+        timeout: 15000
+      };
+
+      const req = https.request(options, (res) => {
+        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+          return makeRequest(res.headers.location, redirectsLeft - 1);
+        }
+
+        let data = '';
+        res.on('data', (chunk) => { data += chunk; });
+        res.on('end', () => {
+          if (res.statusCode >= 200 && res.statusCode < 300) {
+            resolve({ success: true, message: `Email delivered to ${recipient} via Google Web App Relay` });
+          } else {
+            resolve({ success: false, message: `Google Web App returned status ${res.statusCode}` });
+          }
+        });
+      });
+
+      req.on('error', (e) => resolve({ success: false, message: e.message || 'Google Web App connection failed' }));
+      req.on('timeout', () => { req.destroy(); resolve({ success: false, message: 'Google Script Relay timed out' }); });
+
+      req.write(postData);
+      req.end();
+    }
+
+    makeRequest(webAppUrl);
+  });
+}
+
+// Resend HTTPS Email API Helper (Port 443 HTTPS - Unblocked API Email Sending)
+function sendEmailViaResend(apiKey, recipient, subject, body, attachmentJsonStr, fileName) {
+  return new Promise((resolve) => {
+    const postData = JSON.stringify({
+      from: 'AR Callers Attendance Portal <onboarding@resend.dev>',
+      to: [recipient],
+      subject: subject,
+      text: body,
+      attachments: [
+        {
+          filename: fileName,
+          content: Buffer.from(attachmentJsonStr).toString('base64')
+        }
+      ]
+    });
+
+    const options = {
+      hostname: 'api.resend.com',
+      port: 443,
+      path: '/emails',
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey.trim()}`,
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(postData)
+      },
+      timeout: 12000
+    };
+
+    const req = https.request(options, (res) => {
+      let data = '';
+      res.on('data', (chunk) => { data += chunk; });
+      res.on('end', () => {
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          resolve({ success: true, message: `Delivered via Resend API to ${recipient}` });
+        } else {
+          resolve({ success: false, message: `Resend API returned HTTP status ${res.statusCode}: ${data}` });
+        }
+      });
+    });
+
+    req.on('error', (e) => resolve({ success: false, message: e.message }));
+    req.on('timeout', () => { req.destroy(); resolve({ success: false, message: 'Resend API request timed out' }); });
+
+    req.write(postData);
+    req.end();
+  });
+}
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -615,184 +726,213 @@ async function sendEmailBackup(recipientOverride = null) {
   const mailSubject = `[AR Callers Portal] Daily Attendance Backup - ${todayStr}`;
   const mailBody = `Hello Sagar Alapati,\n\nAttached is your automated daily attendance backup for the AR Callers Attendance Portal.\n\nBackup Summary (${todayStr}):\n- Total AR Callers: ${empCount}\n- Total Attendance Records: ${attCount}\n- Date Generated: ${new Date().toLocaleString()}\n\nThis file can be directly imported into your Portal anytime using the "Import Backup File" option.\n\nBest regards,\nAR Callers Attendance Portal System`;
 
+  const webAppUrl = (settings.webAppUrl || process.env.GOOGLE_WEBAPP_URL || '').trim();
+  const resendApiKey = (settings.resendApiKey || process.env.RESEND_API_KEY || '').trim();
+  const fileName = `AR_Callers_Attendance_Backup_${todayStr}.json`;
+
+  // PRIORITY 1: Google Apps Script Web App HTTPS Relay over Port 443 (100% Free, Uses Gmail, No Port Block)
+  if (webAppUrl && webAppUrl.startsWith('http')) {
+    console.log('[Backup Email] Executing Google Apps Script HTTPS Relay over Port 443...');
+    const jsonContent = fs.readFileSync(backupFile, 'utf8');
+    const scriptRes = await sendEmailViaGoogleScript(webAppUrl, recipient, mailSubject, mailBody, jsonContent, fileName);
+
+    if (scriptRes && scriptRes.success) {
+      console.log(`[Backup Email] Google Script Relay delivered backup to ${recipient}`);
+
+      if (!dbData.settings) dbData.settings = {};
+      if (!dbData.settings.email) dbData.settings.email = {};
+      dbData.settings.email.lastSentAt = new Date().toISOString();
+      dbData.settings.email.lastStatus = `Success (Delivered via Google Web App Relay to ${recipient})`;
+      saveDB(dbData);
+      lastEmailBackupDate = todayStr;
+
+      return {
+        success: true,
+        sentEmail: true,
+        relayType: 'GoogleScript',
+        message: `Daily attendance backup successfully sent to ${recipient} via Google Web App Relay!`
+      };
+    } else {
+      console.warn('[Backup Email] Google Script Relay notice:', scriptRes.message);
+    }
+  }
+
+  // PRIORITY 2: Resend HTTPS API Relay over Port 443
+  if (resendApiKey) {
+    console.log('[Backup Email] Executing Resend HTTPS API Relay over Port 443...');
+    const jsonContent = fs.readFileSync(backupFile, 'utf8');
+    const resendRes = await sendEmailViaResend(resendApiKey, recipient, mailSubject, mailBody, jsonContent, fileName);
+
+    if (resendRes && resendRes.success) {
+      console.log(`[Backup Email] Resend API delivered backup to ${recipient}`);
+
+      if (!dbData.settings) dbData.settings = {};
+      if (!dbData.settings.email) dbData.settings.email = {};
+      dbData.settings.email.lastSentAt = new Date().toISOString();
+      dbData.settings.email.lastStatus = `Success (Delivered via Resend API to ${recipient})`;
+      saveDB(dbData);
+      lastEmailBackupDate = todayStr;
+
+      return {
+        success: true,
+        sentEmail: true,
+        relayType: 'Resend',
+        message: `Daily attendance backup successfully sent to ${recipient} via Resend API!`
+      };
+    } else {
+      console.warn('[Backup Email] Resend API notice:', resendRes.message);
+    }
+  }
+
+  // PRIORITY 3: Direct SMTP (Works on standard VPS / local servers)
   const smtpUser = settings.smtpUser || process.env.SMTP_USER || process.env.GMAIL_USER || 'sagaralapati3695@gmail.com';
   const rawPass = settings.smtpPass || process.env.SMTP_PASS || process.env.GMAIL_PASS || process.env.GMAIL_APP_PASSWORD || '';
   const smtpPass = String(rawPass).replace(/\s+/g, '').trim();
   const smtpHost = settings.smtpHost || process.env.SMTP_HOST || 'smtp.gmail.com';
   const smtpPort = parseInt(settings.smtpPort || process.env.SMTP_PORT || '587', 10);
 
-  if (!smtpPass) {
-    console.log(`[Backup Email] SMTP password not configured yet. Backup ready locally at ${backupFile}.`);
-    return {
-      success: false,
-      sentEmail: false,
-      requiresConfig: true,
-      error: `Email password not set. Please enter your Gmail App Password in the Portal Email Settings modal to enable email sending to ${recipient}.`,
-      recipient,
-      backupFile
-    };
-  }
+  if (smtpPass) {
+    try {
+      async function attemptMailSend(transporterOptions) {
+        const transporter = nodemailer.createTransport({
+          ...transporterOptions,
+          lookup: ipv4Lookup,
+          family: 4,
+          connectionTimeout: 8000,
+          greetingTimeout: 8000,
+          socketTimeout: 10000
+        });
 
-  try {
-    async function attemptMailSend(transporterOptions) {
-      const transporter = nodemailer.createTransport({
-        ...transporterOptions,
-        lookup: ipv4Lookup,
-        family: 4,
-        connectionTimeout: 8000,
-        greetingTimeout: 8000,
-        socketTimeout: 10000
-      });
+        return await transporter.sendMail({
+          from: `"AR Callers Attendance Portal" <${smtpUser}>`,
+          to: recipient,
+          subject: mailSubject,
+          text: mailBody,
+          attachments: [
+            {
+              filename: fileName,
+              path: backupFile
+            }
+          ]
+        });
+      }
 
-      return await transporter.sendMail({
-        from: `"AR Callers Attendance Portal" <${smtpUser}>`,
-        to: recipient,
-        subject: mailSubject,
-        text: mailBody,
-        attachments: [
-          {
-            filename: `AR_Callers_Attendance_Backup_${todayStr}.json`,
-            path: backupFile
-          }
-        ]
-      });
-    }
+      let info = null;
 
-    let info = null;
+      if (smtpHost && smtpHost !== 'smtp.gmail.com' && smtpHost !== 'gmail') {
+        info = await attemptMailSend({
+          host: smtpHost,
+          port: smtpPort,
+          secure: smtpPort === 465,
+          auth: { user: smtpUser, pass: smtpPass },
+          tls: { rejectUnauthorized: false }
+        });
+      } else {
+        const resolvedIPv4s = await resolveGmailIPv4s();
+        let sendSuccess = false;
 
-    if (smtpHost && smtpHost !== 'smtp.gmail.com' && smtpHost !== 'gmail') {
-      info = await attemptMailSend({
-        host: smtpHost,
-        port: smtpPort,
-        secure: smtpPort === 465,
-        auth: { user: smtpUser, pass: smtpPass },
-        tls: { rejectUnauthorized: false }
-      });
-    } else {
-      const resolvedIPv4s = await resolveGmailIPv4s();
-      console.log('[Backup Email] Resolved smtp.gmail.com IPv4 addresses:', resolvedIPv4s);
-
-      let sendSuccess = false;
-
-      // Stage 1 & 2: Direct IPv4 sockets
-      for (const ip of resolvedIPv4s) {
-        if (sendSuccess) break;
-        try {
-          console.log(`[Backup Email] Trying IPv4 ${ip}:465 SSL...`);
-          info = await attemptMailSend({
-            host: ip,
-            port: 465,
-            secure: true,
-            auth: { user: smtpUser, pass: smtpPass },
-            tls: { servername: 'smtp.gmail.com', rejectUnauthorized: false }
-          });
-          sendSuccess = true;
-        } catch (ipErr1) {
-          console.warn(`[Backup Email] IPv4 ${ip}:465 failed:`, ipErr1.message);
+        for (const ip of resolvedIPv4s) {
+          if (sendSuccess) break;
           try {
-            console.log(`[Backup Email] Trying IPv4 ${ip}:587 STARTTLS...`);
             info = await attemptMailSend({
               host: ip,
-              port: 587,
-              secure: false,
+              port: 465,
+              secure: true,
               auth: { user: smtpUser, pass: smtpPass },
               tls: { servername: 'smtp.gmail.com', rejectUnauthorized: false }
             });
             sendSuccess = true;
-          } catch (ipErr2) {
-            console.warn(`[Backup Email] IPv4 ${ip}:587 failed:`, ipErr2.message);
+          } catch (ipErr1) {
+            try {
+              info = await attemptMailSend({
+                host: ip,
+                port: 587,
+                secure: false,
+                auth: { user: smtpUser, pass: smtpPass },
+                tls: { servername: 'smtp.gmail.com', rejectUnauthorized: false }
+              });
+              sendSuccess = true;
+            } catch (ipErr2) {}
           }
         }
-      }
 
-      // Stage 3: Standard hostname fallback with ipv4Lookup
-      if (!sendSuccess) {
-        try {
-          console.log('[Backup Email] Trying smtp.gmail.com:465 standard...');
-          info = await attemptMailSend({
-            host: 'smtp.gmail.com',
-            port: 465,
-            secure: true,
-            auth: { user: smtpUser, pass: smtpPass }
-          });
-          sendSuccess = true;
-        } catch (err1) {
-          console.warn('[Backup Email] Standard 465 failed, trying service gmail...', err1.message);
+        if (!sendSuccess) {
           try {
+            info = await attemptMailSend({
+              host: 'smtp.gmail.com',
+              port: 465,
+              secure: true,
+              auth: { user: smtpUser, pass: smtpPass }
+            });
+            sendSuccess = true;
+          } catch (err1) {
             info = await attemptMailSend({
               service: 'gmail',
               auth: { user: smtpUser, pass: smtpPass }
             });
             sendSuccess = true;
-          } catch (err2) {
-            console.warn('[Backup Email] Service gmail failed:', err2.message);
           }
         }
       }
 
-      if (!sendSuccess || !info) {
-        throw new Error('Direct Gmail SMTP connection timed out across all IPv4 ports.');
-      }
-    }
-
-    console.log(`[Backup Email] Backup successfully sent to ${recipient}: ${info.messageId}`);
-
-    if (!dbData.settings) dbData.settings = {};
-    if (!dbData.settings.email) dbData.settings.email = {};
-    dbData.settings.email.lastSentAt = new Date().toISOString();
-    dbData.settings.email.lastStatus = `Success (ID: ${info.messageId})`;
-    saveDB(dbData);
-    lastEmailBackupDate = todayStr;
-
-    return {
-      success: true,
-      sentEmail: true,
-      messageId: info.messageId,
-      message: `Daily attendance backup successfully sent to ${recipient}!`
-    };
-  } catch (err) {
-    console.warn('[Backup Email] Direct SMTP failed. Attempting Stage 4 HTTPS Relay over Port 443...', err.message);
-
-    try {
-      const jsonContent = fs.readFileSync(backupFile, 'utf8');
-      const httpsResult = await sendEmailViaHTTPS(recipient, mailSubject, mailBody, jsonContent);
-
-      if (httpsResult && httpsResult.success) {
-        console.log(`[Backup Email] HTTPS Relay successfully sent backup to ${recipient}`);
-
+      if (info && info.messageId) {
+        console.log(`[Backup Email] Direct SMTP backup sent to ${recipient}: ${info.messageId}`);
         if (!dbData.settings) dbData.settings = {};
         if (!dbData.settings.email) dbData.settings.email = {};
         dbData.settings.email.lastSentAt = new Date().toISOString();
-        dbData.settings.email.lastStatus = `Success (Delivered to ${recipient} via HTTPS Relay)`;
+        dbData.settings.email.lastStatus = `Success (ID: ${info.messageId})`;
         saveDB(dbData);
         lastEmailBackupDate = todayStr;
 
         return {
           success: true,
           sentEmail: true,
-          relayType: 'HTTPS',
-          message: `Daily attendance backup successfully sent to ${recipient} via HTTPS Relay!`
+          messageId: info.messageId,
+          message: `Daily attendance backup successfully sent to ${recipient}!`
         };
-      } else {
-        console.warn('[Backup Email] HTTPS Relay notice:', httpsResult.message);
       }
-    } catch (httpsErr) {
-      console.error('[HTTPS Relay Error]', httpsErr.message);
+    } catch (smtpErr) {
+      console.warn('[Backup Email] Direct SMTP ports blocked on cloud host:', smtpErr.message);
     }
-
-    if (!dbData.settings) dbData.settings = {};
-    if (!dbData.settings.email) dbData.settings.email = {};
-    dbData.settings.email.lastSentAt = new Date().toISOString();
-    dbData.settings.email.lastStatus = `Notice: SMTP blocked by cloud host (${err.message}). Local backup saved.`;
-    saveDB(dbData);
-
-    return {
-      success: false,
-      sentEmail: false,
-      error: `Cloud Host Connection Issue: ${err.message}. Click "Download JSON Directly" below to save your backup file.`,
-      rawError: err.message
-    };
   }
+
+  // PRIORITY 4: FormSubmit HTTPS Relay Backup
+  try {
+    const jsonContent = fs.readFileSync(backupFile, 'utf8');
+    const httpsResult = await sendEmailViaHTTPS(recipient, mailSubject, mailBody, jsonContent);
+
+    if (httpsResult && httpsResult.success) {
+      console.log(`[Backup Email] HTTPS FormSubmit Relay delivered backup to ${recipient}`);
+
+      if (!dbData.settings) dbData.settings = {};
+      if (!dbData.settings.email) dbData.settings.email = {};
+      dbData.settings.email.lastSentAt = new Date().toISOString();
+      dbData.settings.email.lastStatus = `Success (Delivered to ${recipient} via HTTPS Relay)`;
+      saveDB(dbData);
+      lastEmailBackupDate = todayStr;
+
+      return {
+        success: true,
+        sentEmail: true,
+        relayType: 'HTTPS',
+        message: `Daily attendance backup successfully sent to ${recipient} via HTTPS Relay!`
+      };
+    }
+  } catch (httpsErr) {}
+
+  if (!dbData.settings) dbData.settings = {};
+  if (!dbData.settings.email) dbData.settings.email = {};
+  dbData.settings.email.lastSentAt = new Date().toISOString();
+  dbData.settings.email.lastStatus = `Cloud SMTP Blocked. Web App URL or Direct JSON Download ready.`;
+  saveDB(dbData);
+
+  return {
+    success: false,
+    sentEmail: false,
+    requiresConfig: true,
+    error: `Render Cloud Host blocks outbound SMTP ports 465/587. Please paste your free Google Web App URL above or click "Download JSON Directly" below to save your backup!`,
+    backupFile
+  };
 }
 
 // Automatic daily backup job checking every 15 minutes
@@ -825,6 +965,8 @@ app.get('/api/admin/email-settings', (req, res) => {
     smtpPort: settings.smtpPort || 587,
     smtpUser: settings.smtpUser || 'sagaralapati3695@gmail.com',
     hasPassword: !!currentPass,
+    webAppUrl: settings.webAppUrl || '',
+    resendApiKey: settings.resendApiKey || '',
     autoBackupEnabled: settings.autoBackupEnabled !== false,
     lastSentAt: settings.lastSentAt || null,
     lastStatus: settings.lastStatus || null
@@ -834,7 +976,7 @@ app.get('/api/admin/email-settings', (req, res) => {
 // API: Update Email Backup Settings
 app.put('/api/admin/email-settings', (req, res) => {
   const db = loadDB();
-  const { recipientEmail, smtpHost, smtpPort, smtpUser, smtpPass, autoBackupEnabled } = req.body;
+  const { recipientEmail, smtpHost, smtpPort, smtpUser, smtpPass, webAppUrl, resendApiKey, autoBackupEnabled } = req.body;
 
   if (!db.settings) db.settings = {};
   if (!db.settings.email) db.settings.email = {};
@@ -844,8 +986,10 @@ app.put('/api/admin/email-settings', (req, res) => {
   if (smtpPort) db.settings.email.smtpPort = parseInt(smtpPort, 10);
   if (smtpUser) db.settings.email.smtpUser = smtpUser.trim();
   
+  if (typeof webAppUrl === 'string') db.settings.email.webAppUrl = webAppUrl.trim();
+  if (typeof resendApiKey === 'string') db.settings.email.resendApiKey = resendApiKey.trim();
+
   if (typeof smtpPass === 'string' && smtpPass.trim() !== '') {
-    // Automatically remove spaces from 16-letter Gmail app passwords
     const sanitizedPass = smtpPass.trim().replace(/\s+/g, '');
     db.settings.email.smtpPass = sanitizedPass;
   }
@@ -864,6 +1008,8 @@ app.put('/api/admin/email-settings', (req, res) => {
       smtpPort: db.settings.email.smtpPort,
       smtpUser: db.settings.email.smtpUser,
       hasPassword: !!db.settings.email.smtpPass,
+      webAppUrl: db.settings.email.webAppUrl || '',
+      resendApiKey: db.settings.email.resendApiKey || '',
       autoBackupEnabled: db.settings.email.autoBackupEnabled
     }
   });

@@ -598,6 +598,8 @@ async function loadEmailSettingsIntoModal() {
     const data = await res.json();
 
     const recipientInput = document.getElementById('settingRecipientEmail');
+    const webAppUrlInput = document.getElementById('settingWebAppUrl');
+    const webAppBadge = document.getElementById('webAppUrlConfiguredBadge');
     const hostInput = document.getElementById('settingSmtpHost');
     const portInput = document.getElementById('settingSmtpPort');
     const passInput = document.getElementById('settingSmtpPass');
@@ -606,6 +608,8 @@ async function loadEmailSettingsIntoModal() {
     const statusText = document.getElementById('emailStatusText');
 
     if (recipientInput) recipientInput.value = data.recipientEmail || 'sagaralapati3695@gmail.com';
+    if (webAppUrlInput) webAppUrlInput.value = data.webAppUrl || '';
+    if (webAppBadge) webAppBadge.style.display = data.webAppUrl ? 'block' : 'none';
     if (hostInput) hostInput.value = data.smtpHost || 'smtp.gmail.com';
     if (portInput) portInput.value = data.smtpPort || 587;
     if (passInput) {
@@ -628,7 +632,7 @@ async function loadEmailSettingsIntoModal() {
         const icon = isSuccess ? 'fa-circle-check' : 'fa-triangle-exclamation';
         statusText.innerHTML = `<span class="${colorClass}"><i class="fa-solid ${icon}"></i> ${escapeHTML(data.lastStatus)}</span> <small class="text-muted">(${new Date(data.lastSentAt).toLocaleString()})</small>`;
       } else {
-        statusText.textContent = data.hasPassword ? 'Ready to send email backups automatically' : 'Requires Gmail App Password to send emails';
+        statusText.textContent = (data.webAppUrl || data.hasPassword) ? 'Ready to send email backups automatically' : 'Enter Google Web App URL or App Password to enable email backups';
       }
     }
   } catch (err) {}
@@ -637,6 +641,7 @@ async function loadEmailSettingsIntoModal() {
 async function handleSaveEmailSettings(event) {
   event.preventDefault();
   const recipientEmail = document.getElementById('settingRecipientEmail').value.trim();
+  const webAppUrl = document.getElementById('settingWebAppUrl') ? document.getElementById('settingWebAppUrl').value.trim() : '';
   const smtpHost = document.getElementById('settingSmtpHost').value.trim();
   const smtpPort = document.getElementById('settingSmtpPort').value.trim();
   const smtpPass = document.getElementById('settingSmtpPass').value.trim();
@@ -647,6 +652,7 @@ async function handleSaveEmailSettings(event) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         recipientEmail,
+        webAppUrl,
         smtpHost,
         smtpPort,
         smtpUser: recipientEmail,
@@ -658,9 +664,9 @@ async function handleSaveEmailSettings(event) {
     const data = await res.json();
     if (res.ok && data.success) {
       showToast('Email backup settings saved successfully!', 'success');
-      if (smtpPass) {
-        document.getElementById('settingSmtpPass').value = '';
-        showToast('Testing email connection with saved App Password...', 'info');
+      if (webAppUrl || smtpPass) {
+        if (smtpPass) document.getElementById('settingSmtpPass').value = '';
+        showToast('Testing email dispatch with saved settings...', 'info');
         await triggerSendTestEmail();
       }
     } else {
