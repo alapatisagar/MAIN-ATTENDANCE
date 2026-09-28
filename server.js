@@ -509,13 +509,16 @@ app.put('/api/employees/:id', (req, res) => {
 const BACKUP_RECIPIENT_EMAIL = 'sagaralapati3695@gmail.com';
 let lastEmailBackupDate = null;
 
-async function sendEmailBackup(recipient = BACKUP_RECIPIENT_EMAIL) {
+async function sendEmailBackup(recipientOverride = null) {
   const backupFile = MASTER_BACKUP_FILE;
   if (!fs.existsSync(backupFile)) {
     throw new Error('Master backup file not found');
   }
 
   const dbData = loadDB();
+  const settings = (dbData.settings && dbData.settings.email) ? dbData.settings.email : {};
+  const recipient = recipientOverride || settings.recipientEmail || BACKUP_RECIPIENT_EMAIL;
+
   const todayStr = new Date().toISOString().split('T')[0];
   const empCount = dbData.employees ? dbData.employees.length : 0;
   const attCount = dbData.attendance ? dbData.attendance.length : 0;
@@ -523,27 +526,33 @@ async function sendEmailBackup(recipient = BACKUP_RECIPIENT_EMAIL) {
   const mailSubject = `[AR Callers Portal] Daily Attendance Backup - ${todayStr}`;
   const mailBody = `Hello Sagar Alapati,\n\nAttached is your automated daily attendance backup for the AR Callers Attendance Portal.\n\nBackup Summary (${todayStr}):\n- Total AR Callers: ${empCount}\n- Total Attendance Records: ${attCount}\n- Date Generated: ${new Date().toLocaleString()}\n\nThis file can be directly imported into your Portal anytime using the "Import Backup File" option.\n\nBest regards,\nAR Callers Attendance Portal System`;
 
-  const smtpUser = process.env.SMTP_USER || process.env.GMAIL_USER || 'sagaralapati3695@gmail.com';
-  const smtpPass = process.env.SMTP_PASS || process.env.GMAIL_PASS || process.env.GMAIL_APP_PASSWORD || '';
+  const smtpUser = settings.smtpUser || process.env.SMTP_USER || process.env.GMAIL_USER || 'sagaralapati3695@gmail.com';
+  const smtpPass = settings.smtpPass || process.env.SMTP_PASS || process.env.GMAIL_PASS || process.env.GMAIL_APP_PASSWORD || '';
+  const smtpHost = settings.smtpHost || process.env.SMTP_HOST || 'smtp.gmail.com';
+  const smtpPort = parseInt(settings.smtpPort || process.env.SMTP_PORT || '587', 10);
 
   if (!smtpPass) {
-    console.log(`[Backup Email] SMTP password not set in environment. Backup saved locally at ${backupFile}.`);
+    console.log(`[Backup Email] SMTP password not configured yet. Backup ready locally at ${backupFile}.`);
     return {
-      success: true,
+      success: false,
       sentEmail: false,
-      message: `Daily attendance backup saved locally at ${backupFile}. To enable email delivery to ${recipient}, set GMAIL_APP_PASSWORD in Render Environment variables.`,
+      requiresConfig: true,
+      error: `Email password not set. Please enter your Gmail App Password in the Portal Email Settings modal to enable email sending to ${recipient}.`,
       recipient,
       backupFile
     };
   }
 
   const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST || 'smtp.gmail.com',
-    port: parseInt(process.env.SMTP_PORT || '587', 10),
-    secure: process.env.SMTP_SECURE === 'true',
+    host: smtpHost,
+    port: smtpPort,
+    secure: smtpPort === 465,
     auth: {
       user: smtpUser,
       pass: smtpPass
+    },
+    tls: {
+      rejectUnauthorized: false
     }
   });
 
@@ -561,34 +570,100 @@ async function sendEmailBackup(recipient = BACKUP_RECIPIENT_EMAIL) {
   });
 
   console.log(`[Backup Email] Backup successfully sent to ${recipient}: ${info.messageId}`);
+
+  // Log status in settings
+  if (!dbData.settings) dbData.settings = {};
+  if (!dbData.settings.email) dbData.settings.email = {};
+  dbData.settings.email.lastSentAt = new Date().toISOString();
+  dbData.settings.email.lastStatus = `Success (ID: ${info.messageId})`;
+  saveDB(dbData);
   lastEmailBackupDate = todayStr;
+
   return {
     success: true,
     sentEmail: true,
     messageId: info.messageId,
-    message: `Daily attendance backup successfully sent to ${recipient}`
+    message: `Daily attendance backup successfully sent to ${recipient}!`
   };
 }
 
-// Automatic daily backup job checking every 6 hours
+// Automatic daily backup job checking every 15 minutes
 setInterval(async () => {
   try {
+    const dbData = loadDB();
+    const settings = (dbData.settings && dbData.settings.email) ? dbData.settings.email : {};
+    if (settings.autoBackupEnabled === false) return;
+
     const todayStr = new Date().toISOString().split('T')[0];
     if (lastEmailBackupDate !== todayStr) {
-      console.log(`[Auto Email Backup] Checking daily backup...`);
-      await sendEmailBackup(BACKUP_RECIPIENT_EMAIL);
-      lastEmailBackupDate = todayStr;
+      const res = await sendEmailBackup();
+      if (res && res.sentEmail) {
+        console.log(`[Auto Email Backup] Daily automated email sent successfully to ${res.recipient}`);
+      }
     }
   } catch (err) {
     console.error('[Auto Email Backup Error]', err.message);
   }
-}, 6 * 60 * 60 * 1000);
+}, 15 * 60 * 1000);
+
+// API: Get Email Backup Settings
+app.get('/api/admin/email-settings', (req, res) => {
+  const db = loadDB();
+  const settings = (db.settings && db.settings.email) ? db.settings.email : {};
+  res.json({
+    recipientEmail: settings.recipientEmail || 'sagaralapati3695@gmail.com',
+    smtpHost: settings.smtpHost || 'smtp.gmail.com',
+    smtpPort: settings.smtpPort || 587,
+    smtpUser: settings.smtpUser || 'sagaralapati3695@gmail.com',
+    hasPassword: !!(settings.smtpPass || process.env.GMAIL_APP_PASSWORD || process.env.SMTP_PASS),
+    autoBackupEnabled: settings.autoBackupEnabled !== false,
+    lastSentAt: settings.lastSentAt || null,
+    lastStatus: settings.lastStatus || null
+  });
+});
+
+// API: Update Email Backup Settings
+app.put('/api/admin/email-settings', (req, res) => {
+  const db = loadDB();
+  const { recipientEmail, smtpHost, smtpPort, smtpUser, smtpPass, autoBackupEnabled } = req.body;
+
+  if (!db.settings) db.settings = {};
+  if (!db.settings.email) db.settings.email = {};
+
+  if (recipientEmail) db.settings.email.recipientEmail = recipientEmail.trim();
+  if (smtpHost) db.settings.email.smtpHost = smtpHost.trim();
+  if (smtpPort) db.settings.email.smtpPort = parseInt(smtpPort, 10);
+  if (smtpUser) db.settings.email.smtpUser = smtpUser.trim();
+  if (typeof smtpPass === 'string' && smtpPass.trim() !== '') {
+    db.settings.email.smtpPass = smtpPass.trim();
+  }
+  if (typeof autoBackupEnabled === 'boolean') {
+    db.settings.email.autoBackupEnabled = autoBackupEnabled;
+  }
+
+  saveDB(db);
+  res.json({
+    success: true,
+    message: 'Email settings updated successfully!',
+    settings: {
+      recipientEmail: db.settings.email.recipientEmail,
+      smtpHost: db.settings.email.smtpHost,
+      smtpPort: db.settings.email.smtpPort,
+      smtpUser: db.settings.email.smtpUser,
+      hasPassword: !!(db.settings.email.smtpPass || process.env.GMAIL_APP_PASSWORD || process.env.SMTP_PASS),
+      autoBackupEnabled: db.settings.email.autoBackupEnabled
+    }
+  });
+});
 
 // On-demand Email Backup Endpoints
 app.post(['/api/backup/send-email', '/api/admin/send-email-backup'], async (req, res) => {
   try {
-    const recipient = req.body.email || BACKUP_RECIPIENT_EMAIL;
+    const recipient = req.body.email || null;
     const result = await sendEmailBackup(recipient);
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
     res.json(result);
   } catch (err) {
     console.error('Error sending email backup:', err);

@@ -131,6 +131,9 @@
             <button type="button" class="btn-ghost-sm" onclick="handleSendEmailBackup()" title="Send immediate backup to sagaralapati3695@gmail.com">
               <i class="fa-solid fa-envelope text-yellow"></i> Email Backup
             </button>
+            <button type="button" class="btn-ghost-sm" onclick="openEmailSettingsModal()" title="Configure Gmail App Password & Email Settings">
+              <i class="fa-solid fa-gear text-yellow"></i> Email Config
+            </button>
             <button type="button" class="btn-primary-yellow" onclick="openModal('import-backup-modal')" title="Import a .json backup file to restore records">
               <i class="fa-solid fa-file-import"></i> Import Backup
             </button>
@@ -528,6 +531,69 @@
         <div class="modal-footer">
           <button type="button" class="btn-ghost" onclick="closeModal('import-backup-modal')">Cancel</button>
           <button type="submit" class="btn-primary-yellow" id="btnSubmitImport"><i class="fa-solid fa-upload"></i> Upload & Import Backup</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- =========================================================
+       MODAL 8: EMAIL BACKUP SETTINGS MODAL
+       ========================================================= -->
+  <div class="modal-overlay" id="email-settings-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3><i class="fa-solid fa-envelope text-yellow"></i> Email Backup & Automation Settings</h3>
+        <button class="modal-close" onclick="closeModal('email-settings-modal')">&times;</button>
+      </div>
+      <form id="emailSettingsForm" onsubmit="handleSaveEmailSettings(event)">
+        <div class="modal-body">
+          <div class="health-item mb-3">
+            <span class="health-label"><i class="fa-solid fa-paper-plane text-yellow"></i> Auto Email Target:</span>
+            <span class="health-val text-yellow">sagaralapati3695@gmail.com</span>
+          </div>
+
+          <div class="form-group mb-3">
+            <label for="settingRecipientEmail"><i class="fa-solid fa-at text-yellow"></i> Recipient Email Address *</label>
+            <input type="email" id="settingRecipientEmail" class="form-control" value="sagaralapati3695@gmail.com" required>
+          </div>
+
+          <div class="form-group mb-3">
+            <label for="settingSmtpPass">
+              <i class="fa-solid fa-key text-yellow"></i> Gmail App Password (16-letters) *
+              <small class="text-muted">(Required to send automatic emails to sagaralapati3695@gmail.com)</small>
+            </label>
+            <input type="password" id="settingSmtpPass" class="form-control" placeholder="Enter Gmail App Password (e.g. abcd efgh ijkl mnop)">
+            <small id="smtpPassConfiguredBadge" class="text-green" style="display: none;"><i class="fa-solid fa-check"></i> App Password is currently saved & active</small>
+          </div>
+
+          <!-- Quick Guide Accordion Box -->
+          <div class="admin-list-card mb-3 p-3" style="background: rgba(255,255,255,0.03); border-radius: 8px;">
+            <h5 class="mb-2"><i class="fa-solid fa-circle-info text-yellow"></i> How to get a free Gmail App Password in 30 seconds:</h5>
+            <ol class="m-0 pl-3" style="font-size: 0.85rem; line-height: 1.5; color: #cbd5e1;">
+              <li>Go to <strong>Google Account</strong> (myaccount.google.com) &rarr; <strong>Security</strong>.</li>
+              <li>Ensure <strong>2-Step Verification</strong> is ON.</li>
+              <li>Search <strong>App passwords</strong> &rarr; Create app name <em>"Attendance Portal"</em>.</li>
+              <li>Copy the 16-letter password into the box above and click <strong>Save & Send Test Email</strong>!</li>
+            </ol>
+          </div>
+
+          <div class="form-group mb-3">
+            <label><i class="fa-solid fa-server text-yellow"></i> Advanced SMTP Settings (Optional)</label>
+            <div style="display: flex; gap: 10px;">
+              <input type="text" id="settingSmtpHost" class="form-control" placeholder="SMTP Host (smtp.gmail.com)" value="smtp.gmail.com">
+              <input type="number" id="settingSmtpPort" class="form-control" placeholder="Port (587)" value="587" style="max-width: 100px;">
+            </div>
+          </div>
+
+          <div class="health-item mt-2" id="emailStatusBox" style="display: none;">
+            <span class="health-label"><i class="fa-solid fa-clock text-blue"></i> Last Email Status:</span>
+            <span class="health-val" id="emailStatusText">No emails sent yet</span>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-ghost-sm" onclick="triggerSendTestEmail()"><i class="fa-solid fa-paper-plane text-yellow"></i> Send Test Email Now</button>
+          <button type="button" class="btn-ghost-sm" onclick="handleDownloadBackup()"><i class="fa-solid fa-download"></i> Download JSON Directly</button>
+          <button type="submit" class="btn-primary-yellow"><i class="fa-solid fa-floppy-disk"></i> Save Settings</button>
         </div>
       </form>
     </div>

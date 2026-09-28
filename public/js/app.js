@@ -548,7 +548,7 @@ function handleDownloadBackup() {
 }
 
 async function handleSendEmailBackup() {
-  showToast('Sending backup email to sagaralapati3695@gmail.com...', 'info');
+  showToast('Connecting to email server for sagaralapati3695@gmail.com...', 'info');
   try {
     const res = await fetch(`${API_BASE}/backup/send-email`, {
       method: 'POST',
@@ -558,11 +558,94 @@ async function handleSendEmailBackup() {
     const data = await res.json();
     if (res.ok && data.success) {
       showToast(data.message, 'success');
+    } else if (data.requiresConfig) {
+      showToast('⚠️ Gmail Password Required: Please enter your 16-letter App Password in Settings below to enable automatic email sending.', 'error');
+      openEmailSettingsModal();
     } else {
       showToast(data.error || data.message || 'Failed to send email backup', 'error');
     }
   } catch (err) {
     showToast('Error connecting to server for email backup', 'error');
+  }
+}
+
+async function triggerSendTestEmail() {
+  await handleSendEmailBackup();
+  await loadEmailSettingsIntoModal();
+}
+
+async function openEmailSettingsModal() {
+  openModal('email-settings-modal');
+  await loadEmailSettingsIntoModal();
+}
+
+async function loadEmailSettingsIntoModal() {
+  try {
+    const res = await fetch(`${API_BASE}/admin/email-settings`);
+    if (!res.ok) return;
+    const data = await res.json();
+
+    const recipientInput = document.getElementById('settingRecipientEmail');
+    const hostInput = document.getElementById('settingSmtpHost');
+    const portInput = document.getElementById('settingSmtpPort');
+    const badge = document.getElementById('smtpPassConfiguredBadge');
+    const statusBox = document.getElementById('emailStatusBox');
+    const statusText = document.getElementById('emailStatusText');
+
+    if (recipientInput) recipientInput.value = data.recipientEmail || 'sagaralapati3695@gmail.com';
+    if (hostInput) hostInput.value = data.smtpHost || 'smtp.gmail.com';
+    if (portInput) portInput.value = data.smtpPort || 587;
+
+    if (badge) {
+      badge.style.display = data.hasPassword ? 'block' : 'none';
+    }
+
+    if (statusBox && statusText) {
+      if (data.lastSentAt) {
+        statusBox.style.display = 'block';
+        statusText.textContent = `${data.lastStatus || 'Success'} (${new Date(data.lastSentAt).toLocaleString()})`;
+      } else {
+        statusBox.style.display = 'block';
+        statusText.textContent = data.hasPassword ? 'Ready to send email backups automatically' : 'Requires Gmail App Password to send emails';
+      }
+    }
+  } catch (err) {}
+}
+
+async function handleSaveEmailSettings(event) {
+  event.preventDefault();
+  const recipientEmail = document.getElementById('settingRecipientEmail').value.trim();
+  const smtpHost = document.getElementById('settingSmtpHost').value.trim();
+  const smtpPort = document.getElementById('settingSmtpPort').value.trim();
+  const smtpPass = document.getElementById('settingSmtpPass').value.trim();
+
+  try {
+    const res = await fetch(`${API_BASE}/admin/email-settings`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        recipientEmail,
+        smtpHost,
+        smtpPort,
+        smtpUser: recipientEmail,
+        smtpPass,
+        autoBackupEnabled: true
+      })
+    });
+
+    const data = await res.json();
+    if (res.ok && data.success) {
+      showToast('Email backup settings saved successfully!', 'success');
+      if (smtpPass) {
+        document.getElementById('settingSmtpPass').value = '';
+        showToast('Testing email connection with saved App Password...', 'info');
+        await triggerSendTestEmail();
+      }
+    } else {
+      showToast(data.error || 'Failed to save email settings', 'error');
+    }
+  } catch (err) {
+    showToast('Error saving email settings', 'error');
   }
 }
 
