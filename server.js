@@ -77,7 +77,7 @@ function sendEmailViaGoogleScript(webAppUrl, recipient, subject, body, attachmen
       fileContent: attachmentJsonStr
     });
 
-    function makeRequest(targetUrl, redirectsLeft = 3) {
+    function makeRequest(targetUrl, isPost = true, redirectsLeft = 3) {
       if (redirectsLeft <= 0) {
         return resolve({ success: false, message: 'Google Script Relay: Too many redirects' });
       }
@@ -93,17 +93,18 @@ function sendEmailViaGoogleScript(webAppUrl, recipient, subject, body, attachmen
         hostname: parsedUrl.hostname,
         port: 443,
         path: parsedUrl.pathname + parsedUrl.search,
-        method: 'POST',
-        headers: {
+        method: isPost ? 'POST' : 'GET',
+        headers: isPost ? {
           'Content-Type': 'application/json',
           'Content-Length': Buffer.byteLength(postData)
-        },
+        } : {},
         timeout: 15000
       };
 
       const req = https.request(options, (res) => {
         if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-          return makeRequest(res.headers.location, redirectsLeft - 1);
+          // Google Apps Script redirects to script.googleusercontent.com which expects GET
+          return makeRequest(res.headers.location, false, redirectsLeft - 1);
         }
 
         let data = '';
@@ -112,7 +113,7 @@ function sendEmailViaGoogleScript(webAppUrl, recipient, subject, body, attachmen
           if (res.statusCode >= 200 && res.statusCode < 300) {
             resolve({ success: true, message: `Email delivered to ${recipient} via Google Web App Relay` });
           } else {
-            resolve({ success: false, message: `Google Web App returned status ${res.statusCode}` });
+            resolve({ success: false, message: `Google Web App returned status ${res.statusCode}: ${data.substring(0, 100)}` });
           }
         });
       });
@@ -120,11 +121,13 @@ function sendEmailViaGoogleScript(webAppUrl, recipient, subject, body, attachmen
       req.on('error', (e) => resolve({ success: false, message: e.message || 'Google Web App connection failed' }));
       req.on('timeout', () => { req.destroy(); resolve({ success: false, message: 'Google Script Relay timed out' }); });
 
-      req.write(postData);
+      if (isPost) {
+        req.write(postData);
+      }
       req.end();
     }
 
-    makeRequest(webAppUrl);
+    makeRequest(webAppUrl, true);
   });
 }
 
