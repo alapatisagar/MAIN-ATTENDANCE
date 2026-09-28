@@ -609,11 +609,13 @@ async function loadEmailSettingsIntoModal() {
     }
 
     if (statusBox && statusText) {
-      if (data.lastSentAt) {
-        statusBox.style.display = 'block';
-        statusText.textContent = `${data.lastStatus || 'Success'} (${new Date(data.lastSentAt).toLocaleString()})`;
+      statusBox.style.display = 'block';
+      if (data.lastSentAt && data.lastStatus) {
+        const isSuccess = data.lastStatus.startsWith('Success');
+        const colorClass = isSuccess ? 'text-green' : 'text-red';
+        const icon = isSuccess ? 'fa-circle-check' : 'fa-triangle-exclamation';
+        statusText.innerHTML = `<span class="${colorClass}"><i class="fa-solid ${icon}"></i> ${escapeHTML(data.lastStatus)}</span> <small class="text-muted">(${new Date(data.lastSentAt).toLocaleString()})</small>`;
       } else {
-        statusBox.style.display = 'block';
         statusText.textContent = data.hasPassword ? 'Ready to send email backups automatically' : 'Requires Gmail App Password to send emails';
       }
     }

@@ -550,62 +550,80 @@ async function sendEmailBackup(recipientOverride = null) {
     };
   }
 
-  // Create transporter (Use service: 'gmail' for Gmail, or host/port for custom SMTP)
-  let transportOptions;
-  if (smtpHost === 'smtp.gmail.com' || smtpHost === 'gmail') {
-    transportOptions = {
-      service: 'gmail',
-      auth: {
-        user: smtpUser,
-        pass: smtpPass
-      }
+  try {
+    // Create transporter (Use service: 'gmail' for Gmail, or host/port for custom SMTP)
+    let transportOptions;
+    if (smtpHost === 'smtp.gmail.com' || smtpHost === 'gmail') {
+      transportOptions = {
+        service: 'gmail',
+        auth: {
+          user: smtpUser,
+          pass: smtpPass
+        }
+      };
+    } else {
+      transportOptions = {
+        host: smtpHost,
+        port: smtpPort,
+        secure: smtpPort === 465,
+        auth: {
+          user: smtpUser,
+          pass: smtpPass
+        },
+        tls: {
+          rejectUnauthorized: false
+        }
+      };
+    }
+
+    const transporter = nodemailer.createTransport(transportOptions);
+
+    const info = await transporter.sendMail({
+      from: `"AR Callers Attendance Portal" <${smtpUser}>`,
+      to: recipient,
+      subject: mailSubject,
+      text: mailBody,
+      attachments: [
+        {
+          filename: `AR_Callers_Attendance_Backup_${todayStr}.json`,
+          path: backupFile
+        }
+      ]
+    });
+
+    console.log(`[Backup Email] Backup successfully sent to ${recipient}: ${info.messageId}`);
+
+    // Log status in settings
+    if (!dbData.settings) dbData.settings = {};
+    if (!dbData.settings.email) dbData.settings.email = {};
+    dbData.settings.email.lastSentAt = new Date().toISOString();
+    dbData.settings.email.lastStatus = `Success (ID: ${info.messageId})`;
+    saveDB(dbData);
+    lastEmailBackupDate = todayStr;
+
+    return {
+      success: true,
+      sentEmail: true,
+      messageId: info.messageId,
+      message: `Daily attendance backup successfully sent to ${recipient}!`
     };
-  } else {
-    transportOptions = {
-      host: smtpHost,
-      port: smtpPort,
-      secure: smtpPort === 465,
-      auth: {
-        user: smtpUser,
-        pass: smtpPass
-      },
-      tls: {
-        rejectUnauthorized: false
-      }
+  } catch (err) {
+    console.error('[Backup Email Error]', err.message || err);
+
+    // Save exact error into settings log
+    if (!dbData.settings) dbData.settings = {};
+    if (!dbData.settings.email) dbData.settings.email = {};
+    dbData.settings.email.lastSentAt = new Date().toISOString();
+    dbData.settings.email.lastStatus = `Failed: ${err.message || 'Authentication error'}`;
+    saveDB(dbData);
+
+    return {
+      success: false,
+      sentEmail: false,
+      error: `Gmail Error: ${err.message || 'Invalid login details'}. Please make sure 2-Step Verification is ON and your 16-letter App Password is correct.`,
+      rawError: err.message
     };
   }
-
-  const transporter = nodemailer.createTransport(transportOptions);
-
-  const info = await transporter.sendMail({
-    from: `"AR Callers Attendance Portal" <${smtpUser}>`,
-    to: recipient,
-    subject: mailSubject,
-    text: mailBody,
-    attachments: [
-      {
-        filename: `AR_Callers_Attendance_Backup_${todayStr}.json`,
-        path: backupFile
-      }
-    ]
-  });
-
-  console.log(`[Backup Email] Backup successfully sent to ${recipient}: ${info.messageId}`);
-
-  // Log status in settings
-  if (!dbData.settings) dbData.settings = {};
-  if (!dbData.settings.email) dbData.settings.email = {};
-  dbData.settings.email.lastSentAt = new Date().toISOString();
-  dbData.settings.email.lastStatus = `Success (ID: ${info.messageId})`;
-  saveDB(dbData);
-  lastEmailBackupDate = todayStr;
-
-  return {
-    success: true,
-    sentEmail: true,
-    messageId: info.messageId,
-    message: `Daily attendance backup successfully sent to ${recipient}!`
-  };
 }
 
 // Automatic daily backup job checking every 15 minutes
