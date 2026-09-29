@@ -1310,6 +1310,12 @@ function handleVoiceCommandProcess(transcript) {
   if (unmatchedQueries.length > 0) {
     showToast(`🎤 Could not match caller: "${unmatchedQueries.join(', ')}"`, 'error');
   }
+
+  // Clear search input and searchQuery so roster table displays all callers with updated status
+  const searchInput = document.getElementById('searchEmployeeInput');
+  if (searchInput) searchInput.value = '';
+  state.searchQuery = '';
+  renderAttendanceTable();
 }
 
 /* ---------------------------------------------------------
