@@ -398,24 +398,53 @@ function updateStatsSummary() {
   let absent = 0;
   let halfDay = 0;
   let holidayOff = 0;
+  let unmarked = 0;
 
   state.records.forEach(r => {
     if (r.status === 'Present') present++;
     else if (r.status === 'Absent') absent++;
     else if (r.status === 'Half Day') halfDay++;
     else if (r.status === 'Holiday / Off' || r.status === 'On Leave') holidayOff++;
+    else unmarked++;
   });
 
   const markedWork = present + absent + halfDay;
   const rate = markedWork > 0 ? Math.round(((present + (halfDay * 0.5)) / markedWork) * 100) : 0;
 
-  document.getElementById('statTotalEmp').textContent = total;
-  document.getElementById('statPresent').textContent = present;
-  document.getElementById('statAbsent').textContent = absent;
-  document.getElementById('statHalfDay').textContent = halfDay;
-  document.getElementById('statHolidayOff').textContent = holidayOff;
+  if (document.getElementById('statTotalEmp')) document.getElementById('statTotalEmp').textContent = total;
+  if (document.getElementById('statPresent')) document.getElementById('statPresent').textContent = present;
+  if (document.getElementById('statAbsent')) document.getElementById('statAbsent').textContent = absent;
+  if (document.getElementById('statHalfDay')) document.getElementById('statHalfDay').textContent = halfDay;
+  if (document.getElementById('statHolidayOff')) document.getElementById('statHolidayOff').textContent = holidayOff;
+  if (document.getElementById('statUnmarked')) document.getElementById('statUnmarked').textContent = unmarked;
+  
   const rateEl = document.getElementById('statRate');
   if (rateEl) rateEl.textContent = `${rate}%`;
+
+  const btnRemaining = document.getElementById('btnMarkRemainingPresent');
+  if (btnRemaining) {
+    if (unmarked > 0) {
+      btnRemaining.style.display = 'inline-flex';
+      btnRemaining.innerHTML = `<i class="fa-solid fa-check-double text-yellow"></i> Mark Remaining (${unmarked}) as Present`;
+    } else {
+      btnRemaining.style.display = 'none';
+    }
+  }
+}
+
+async function handleMarkRemainingPresent() {
+  const unmarkedRecs = state.records.filter(r => r.status === 'Unmarked' || !r.status);
+  if (unmarkedRecs.length === 0) {
+    showToast('All AR Callers are already marked!', 'info');
+    return;
+  }
+
+  const count = unmarkedRecs.length;
+  unmarkedRecs.forEach(r => {
+    handleMarkAttendance(r.employeeId, 'Present');
+  });
+
+  showToast(`Successfully marked all ${count} remaining callers as Present!`, 'success');
 }
 
 async function handleMarkAttendance(employeeId, status) {

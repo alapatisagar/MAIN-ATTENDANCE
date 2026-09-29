@@ -137,7 +137,10 @@
             <button type="button" class="btn-ghost-sm" onclick="openEmailSettingsModal()" title="Configure Gmail App Password & Email Settings">
               <i class="fa-solid fa-gear text-yellow"></i> Email Config
             </button>
-            <button type="button" class="btn-primary-yellow" onclick="openModal('import-backup-modal')" title="Import a .json backup file to restore records">
+            <button type="button" class="btn-primary-yellow" id="btnMarkRemainingPresent" onclick="handleMarkRemainingPresent()" title="Mark all remaining unmarked callers as Present">
+              <i class="fa-solid fa-check-double"></i> Mark Remaining Unmarked as Present
+            </button>
+            <button type="button" class="btn-ghost-sm" onclick="openModal('import-backup-modal')" title="Import a .json backup file to restore records">
               <i class="fa-solid fa-file-import"></i> Import Backup
             </button>
             <button type="button" class="btn-ghost-sm" onclick="window.print()" title="Print current day attendance sheet">
@@ -189,6 +192,14 @@
           <div class="stat-details">
             <span class="stat-value" id="statHolidayOff">0</span>
             <span class="stat-label">Holiday / Off</span>
+          </div>
+        </div>
+
+        <div class="stat-card" id="statCardUnmarked" onclick="handleMarkRemainingPresent()" style="cursor: pointer;" title="Click to mark all remaining unmarked callers as Present">
+          <div class="stat-icon" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b;"><i class="fa-solid fa-clock"></i></div>
+          <div class="stat-details">
+            <span class="stat-value" id="statUnmarked">0</span>
+            <span class="stat-label">Unmarked / Pending</span>
           </div>
         </div>
 
