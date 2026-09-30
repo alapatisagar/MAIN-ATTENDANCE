@@ -119,6 +119,12 @@
             <button type="button" class="btn-primary-excel" onclick="openModal('export-monthly-modal')">
               <i class="fa-solid fa-file-excel"></i> Export Monthly Excel
             </button>
+            <button type="button" class="btn-ghost-sm" onclick="openModal('custom-range-export-modal')" title="Export custom date range, fiscal quarters (Q1-Q4), or Year to Date">
+              <i class="fa-solid fa-calendar-days text-yellow"></i> Custom Range / Quarter Export
+            </button>
+            <button type="button" class="btn-ghost-sm" onclick="openBackupManagerModal()" title="View history of all snapshot backups and 1-click restore">
+              <i class="fa-solid fa-clock-rotate-left text-yellow"></i> Backup History & Restore
+            </button>
             <button type="button" class="btn-ghost-sm btn-whatsapp" onclick="handleShareDailySummary()" title="Share daily summary via WhatsApp or SMS">
               <i class="fa-brands fa-whatsapp text-green"></i> Share WhatsApp Summary
             </button>
@@ -644,9 +650,107 @@
     </div>
   </div>
 
+  <!-- =========================================================
+       MODAL 9: CUSTOM DATE RANGE & QUARTER EXPORT MODAL
+       ========================================================= -->
+  <div class="modal-overlay" id="custom-range-export-modal">
+    <div class="modal-card modal-md">
+      <div class="modal-header">
+        <h3><i class="fa-solid fa-file-excel text-green"></i> Export Custom Range & Quarter Excel</h3>
+        <button class="modal-close" onclick="closeModal('custom-range-export-modal')">&times;</button>
+      </div>
+      <form id="customRangeExportForm" onsubmit="handleCustomRangeExportSubmit(event)">
+        <div class="modal-body">
+          <p class="modal-description">
+            Select a custom start and end date (e.g. Sept 1 to Sept 15) or click one of the 1-click Quarter / YTD preset buttons below.
+          </p>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">
+            <div class="form-group">
+              <label for="customExportStartDate"><i class="fa-solid fa-calendar text-yellow"></i> Start Date *</label>
+              <input type="date" id="customExportStartDate" class="form-control">
+            </div>
+            <div class="form-group">
+              <label for="customExportEndDate"><i class="fa-solid fa-calendar-check text-yellow"></i> End Date *</label>
+              <input type="date" id="customExportEndDate" class="form-control">
+            </div>
+          </div>
+
+          <div style="border-top: 1px dashed rgba(245, 158, 11, 0.3); pt-3; margin-top: 12px; padding-top: 12px;">
+            <label style="font-weight: 700; color: #f59e0b; font-size: 0.85rem; display: block; margin-bottom: 8px;"><i class="fa-solid fa-bolt"></i> 1-Click Quarter & YTD Presets:</label>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+              <button type="button" class="btn-ghost-sm" onclick="handlePresetExport('Q1')"><i class="fa-solid fa-chart-line text-yellow"></i> Q1 (Jan - Mar)</button>
+              <button type="button" class="btn-ghost-sm" onclick="handlePresetExport('Q2')"><i class="fa-solid fa-chart-line text-yellow"></i> Q2 (Apr - Jun)</button>
+              <button type="button" class="btn-ghost-sm" onclick="handlePresetExport('Q3')"><i class="fa-solid fa-chart-line text-yellow"></i> Q3 (Jul - Sep)</button>
+              <button type="button" class="btn-ghost-sm" onclick="handlePresetExport('Q4')"><i class="fa-solid fa-chart-line text-yellow"></i> Q4 (Oct - Dec)</button>
+              <button type="button" class="btn-primary-yellow" style="grid-column: span 2;" onclick="handlePresetExport('YTD')"><i class="fa-solid fa-calendar-check"></i> Export Full Year To Date (YTD 2026)</button>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-ghost" onclick="closeModal('custom-range-export-modal')">Cancel</button>
+          <button type="submit" class="btn-primary-excel"><i class="fa-solid fa-download"></i> Download Range Excel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- =========================================================
+       MODAL 10: BACKUP HISTORY & 1-CLICK RESTORE MANAGER MODAL
+       ========================================================= -->
+  <div class="modal-overlay" id="backup-manager-modal">
+    <div class="modal-card modal-lg" style="max-width: 820px; width: 95vw; max-height: 90vh; display: flex; flex-direction: column; overflow: hidden;">
+      <div class="modal-header">
+        <h3><i class="fa-solid fa-clock-rotate-left text-yellow"></i> Backup History & 1-Click Restore Manager</h3>
+        <button class="modal-close" onclick="closeModal('backup-manager-modal')">&times;</button>
+      </div>
+
+      <div class="modal-body" style="padding: 20px 24px; overflow-y: auto; flex: 1;">
+        <p class="modal-description">
+          All automatic daily backups and master snapshots created for your portal are listed below. Click <strong>Restore This Point</strong> anytime to roll back or restore your database with a 1-click safety backup guard.
+        </p>
+
+        <!-- Active Database Status Box -->
+        <div class="admin-list-card mb-3 p-3" style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 10px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+            <div>
+              <span style="font-size: 0.82rem; color: #94a3b8; font-weight: 700; text-transform: uppercase;">Active Database State</span>
+              <div style="font-size: 1.05rem; font-weight: 800; color: #10b981;" id="activeDbStatsBadge">Loading active database metrics...</div>
+            </div>
+            <button type="button" class="btn-ghost-sm" onclick="handleDownloadBackup()">
+              <i class="fa-solid fa-download text-yellow"></i> Download Active DB JSON
+            </button>
+          </div>
+        </div>
+
+        <div class="table-responsive modal-table-wrap">
+          <table class="attendance-table">
+            <thead>
+              <tr>
+                <th>Backup File</th>
+                <th>Covered Dates</th>
+                <th class="text-center">Logs Saved</th>
+                <th class="text-center">File Size</th>
+                <th class="text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody id="backupHistoryTableBody">
+              <tr><td colspan="5" class="text-center">Loading backup snapshots list...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="modal-footer" style="padding: 16px 24px; background: rgba(10, 14, 23, 0.98); border-top: 1.5px solid var(--yellow-border); display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+        <span class="text-muted" style="font-size: 0.82rem;"><i class="fa-solid fa-shield-check text-green"></i> 100% Zero-Data-Loss Safety Guard Active</span>
+        <button type="button" class="btn-ghost" onclick="closeModal('backup-manager-modal')">Close</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Toast Notification Container -->
   <div id="toastContainer" class="toast-container"></div>
 
-  <script src="js/app.js?v=20261001_v12"></script>
+  <script src="js/app.js?v=20261001_v15"></script>
 </body>
 </html>

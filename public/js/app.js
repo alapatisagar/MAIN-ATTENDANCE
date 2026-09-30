@@ -1424,3 +1424,122 @@ function speakVoiceConfirmation(text) {
   } catch (e) {}
 }
 
+/* ---------------------------------------------------------
+   9. CUSTOM RANGE EXPORT & BACKUP HISTORY RESTORE MANAGER
+   --------------------------------------------------------- */
+function handleCustomRangeExportSubmit(e) {
+  e.preventDefault();
+  const startDate = document.getElementById('customExportStartDate').value;
+  const endDate = document.getElementById('customExportEndDate').value;
+
+  if (!startDate || !endDate) {
+    showToast('Please select both Start Date and End Date', 'error');
+    return;
+  }
+  if (startDate > endDate) {
+    showToast('Start Date cannot be after End Date', 'error');
+    return;
+  }
+
+  showToast(`Downloading Custom Range Excel Report (${formatUSDate(startDate)} to ${formatUSDate(endDate)})...`, 'success');
+  closeModal('custom-range-export-modal');
+  window.location.href = `${API_BASE}/export/custom-excel?startDate=${startDate}&endDate=${endDate}`;
+}
+
+function handlePresetExport(preset) {
+  const currentYear = new Date().getFullYear();
+  let label = preset;
+  if (preset === 'YTD') label = `Full Year ${currentYear} (YTD)`;
+  else label = `${preset} ${currentYear}`;
+
+  showToast(`Downloading ${label} Attendance Excel Report...`, 'success');
+  closeModal('custom-range-export-modal');
+  window.location.href = `${API_BASE}/export/custom-excel?rangePreset=${preset}&year=${currentYear}`;
+}
+
+async function openBackupManagerModal() {
+  openModal('backup-manager-modal');
+  await fetchBackupHistory();
+}
+
+async function fetchBackupHistory() {
+  const tbody = document.getElementById('backupHistoryTableBody');
+  const activeBadge = document.getElementById('activeDbStatsBadge');
+  if (!tbody) return;
+
+  tbody.innerHTML = `<tr><td colspan="5" class="text-center"><i class="fa-solid fa-spinner fa-spin text-yellow"></i> Loading stored backups...</td></tr>`;
+
+  try {
+    const res = await fetch(`${API_BASE}/admin/backups/list`);
+    if (!res.ok) {
+      tbody.innerHTML = `<tr><td colspan="5" class="text-center text-red">Failed to load backup list</td></tr>`;
+      return;
+    }
+
+    const data = await res.json();
+    if (activeBadge && data.activeDB) {
+      activeBadge.textContent = `${data.activeDB.employees} Callers | ${data.activeDB.attendance} Historical Attendance Logs Protected`;
+    }
+
+    if (!data.backups || data.backups.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted">No backup snapshots found</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = data.backups.map(item => {
+      const isMaster = item.isMaster;
+      const dateRangeStr = (item.earliestDate && item.latestDate) ? `${item.earliestDate} to ${item.latestDate}` : 'Full System Backup';
+
+      return `
+        <tr>
+          <td>
+            <strong>${escapeHTML(item.filename)}</strong>
+            ${isMaster ? '<span class="admin-badge-sm ml-1" style="background: rgba(16, 185, 129, 0.2); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.4);">Master Archive</span>' : ''}
+            <div class="text-muted" style="font-size: 0.78rem;">Created: ${new Date(item.modifiedAt).toLocaleString()}</div>
+          </td>
+          <td><span style="font-size: 0.85rem; font-weight: 700; color: #38bdf8;">${dateRangeStr}</span></td>
+          <td class="text-center"><strong>${item.attCount}</strong> logs (${item.empCount} callers)</td>
+          <td class="text-center text-muted">${item.sizeKb} KB</td>
+          <td class="text-right">
+            <div style="display: flex; gap: 6px; justify-content: flex-end;">
+              <a class="btn-ghost-sm" href="${API_BASE}/backup/download?file=${encodeURIComponent(item.filename)}" title="Download JSON file">
+                <i class="fa-solid fa-download text-yellow"></i>
+              </a>
+              <button class="btn-primary-yellow" style="padding: 6px 12px; font-size: 0.8rem;" onclick="handleRestoreBackup('${escapeHTML(item.filename)}', ${item.attCount})">
+                <i class="fa-solid fa-rotate-left"></i> Restore This Point
+              </button>
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="5" class="text-center text-red">Error fetching backup history</td></tr>`;
+  }
+}
+
+async function handleRestoreBackup(filename, logCount) {
+  if (!confirm(`⚠️ RESTORE WARNING:\nAre you sure you want to restore database from snapshot "${filename}" (${logCount} attendance logs)?\n\nA safety pre-restore backup will be created automatically before restoring.`)) return;
+
+  showToast(`Restoring database to point ${filename}...`, 'info');
+
+  try {
+    const res = await fetch(`${API_BASE}/admin/backups/restore`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ filename })
+    });
+
+    const data = await res.json();
+    if (res.ok && data.success) {
+      showToast(data.message, 'success');
+      closeModal('backup-manager-modal');
+      await fetchAttendanceForDate();
+    } else {
+      showToast(data.error || 'Failed to restore backup', 'error');
+    }
+  } catch (err) {
+    showToast('Network error restoring backup', 'error');
+  }
+}
+

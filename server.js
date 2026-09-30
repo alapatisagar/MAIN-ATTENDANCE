@@ -1653,6 +1653,339 @@ app.get('/api/admin/system-status', (req, res) => {
   });
 });
 
+// 11. Custom Date Range & Quarter Spreadsheet Generator (.xlsx)
+async function buildCustomRangeExcelBuffer(startDateStr, endDateStr, titleLabel = 'Custom Date Range') {
+  const db = loadDB();
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'AR Callers Attendance System';
+  workbook.created = new Date();
+
+  const startParts = startDateStr.split('-').map(Number);
+  const endParts = endDateStr.split('-').map(Number);
+
+  const startDateObj = new Date(Date.UTC(startParts[0], startParts[1] - 1, startParts[2]));
+  const endDateObj = new Date(Date.UTC(endParts[0], endParts[1] - 1, endParts[2]));
+
+  const dateList = [];
+  let curr = new Date(startDateObj);
+  while (curr <= endDateObj) {
+    const y = curr.getUTCFullYear();
+    const m = String(curr.getUTCMonth() + 1).padStart(2, '0');
+    const d = String(curr.getUTCDate()).padStart(2, '0');
+    dateList.push(`${y}-${m}-${d}`);
+    curr.setUTCDate(curr.getUTCDate() + 1);
+  }
+
+  const usStart = formatUSDate(startDateStr);
+  const usEnd = formatUSDate(endDateStr);
+  const worksheet = workbook.addWorksheet('Attendance Report');
+
+  const attendanceList = db.attendance || [];
+  const rangeRecords = attendanceList.filter(a => a.date && a.date >= startDateStr && a.date <= endDateStr);
+
+  const targetEmps = db.employees.filter(e => !e.isArchived || rangeRecords.some(r => r.employeeId === e.id));
+  sortNumerically(targetEmps);
+
+  // Table 1: Daily Grid
+  const weekdayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const headerRowValues = ['EMPLOYEE NAME'];
+
+  dateList.forEach(iso => {
+    const p = iso.split('-').map(Number);
+    const dObj = new Date(Date.UTC(p[0], p[1] - 1, p[2]));
+    const dayOfWeek = dObj.getUTCDay();
+    const mStr = String(p[1]).padStart(2, '0');
+    const dStr = String(p[2]).padStart(2, '0');
+    headerRowValues.push(`${mStr}/${dStr}/${p[0]} (${weekdayNames[dayOfWeek]})`);
+  });
+
+  const row1 = worksheet.addRow(headerRowValues);
+  row1.height = 28;
+  row1.eachCell((cell) => {
+    cell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF00A4E4' } };
+    cell.alignment = { vertical: 'middle', horizontal: 'center' };
+    cell.border = {
+      top: { style: 'thin', color: { argb: 'FF007090' } },
+      left: { style: 'thin', color: { argb: 'FF007090' } },
+      bottom: { style: 'medium', color: { argb: 'FF007090' } },
+      right: { style: 'thin', color: { argb: 'FF007090' } }
+    };
+  });
+  row1.getCell(1).alignment = { vertical: 'middle', horizontal: 'left' };
+
+  worksheet.getColumn(1).width = 32;
+  for (let c = 2; c <= dateList.length + 1; c++) {
+    worksheet.getColumn(c).width = 16;
+  }
+
+  targetEmps.forEach(emp => {
+    const rowValues = [emp.name.toUpperCase()];
+
+    dateList.forEach(iso => {
+      const p = iso.split('-').map(Number);
+      const dObj = new Date(Date.UTC(p[0], p[1] - 1, p[2]));
+      const dayOfWeek = dObj.getUTCDay();
+      const isWeekend = (dayOfWeek === 0 || dayOfWeek === 6);
+
+      const record = rangeRecords.find(r => r.employeeId === emp.id && r.date === iso);
+      let status = record ? record.status : (isWeekend ? 'Holiday / Off' : 'Unmarked');
+
+      let cellText = 'P';
+      if (status === 'Present') cellText = 'P';
+      else if (status === 'Absent') cellText = 'A';
+      else if (status === 'Half Day') cellText = '0.5P';
+      else if (status === 'Holiday / Off' || status === 'On Leave') cellText = 'OFF';
+      else cellText = 'P';
+
+      rowValues.push(cellText);
+    });
+
+    const row = worksheet.addRow(rowValues);
+    row.height = 22;
+
+    const nameCell = row.getCell(1);
+    nameCell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FF000000' } };
+    nameCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFEA00' } };
+    nameCell.alignment = { vertical: 'middle', horizontal: 'left' };
+    nameCell.border = {
+      top: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+      left: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+      bottom: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+      right: { style: 'thin', color: { argb: 'FFCCCCCC' } }
+    };
+
+    for (let d = 1; d <= dateList.length; d++) {
+      const cell = row.getCell(d + 1);
+      const val = cell.value;
+      cell.alignment = { vertical: 'middle', horizontal: 'center' };
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+        left: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+        bottom: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+        right: { style: 'thin', color: { argb: 'FFCCCCCC' } }
+      };
+
+      if (val === 'A' || val === 'OFF' || val === '0.5P') {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFF0000' } };
+        cell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+      } else {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFFFF' } };
+        cell.font = { name: 'Calibri', size: 10, bold: false, color: { argb: 'FF000000' } };
+      }
+    }
+  });
+
+  worksheet.addRow([]);
+  worksheet.addRow([]);
+
+  // Table 2: Summary Table
+  const bannerRow = worksheet.addRow([`EMPLOYEE ATTENDANCE SUMMARY - ${titleLabel.toUpperCase()} (${usStart} TO ${usEnd})`]);
+  bannerRow.height = 30;
+  const bannerCell = bannerRow.getCell(1);
+  bannerCell.font = { name: 'Calibri', size: 13, bold: true, color: { argb: 'FFFFFFFF' } };
+  bannerCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF003366' } };
+  bannerCell.alignment = { vertical: 'middle', horizontal: 'left' };
+
+  const summaryHeaderRow = worksheet.addRow([
+    'EMPLOYEE NAME',
+    'TOTAL WORKING DAYS',
+    'NUMBER OF PRESENTS',
+    'NUMBER OF ABSENTS',
+    'ATTENDANCE PERCENTAGE (%)'
+  ]);
+  summaryHeaderRow.height = 26;
+
+  const headerColors = ['FFFFEA00', 'FF00A4E4', 'FF10B981', 'FFEF4444', 'FFF59E0B'];
+  summaryHeaderRow.eachCell((cell, colNum) => {
+    cell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FF000000' } };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: headerColors[colNum - 1] || 'FFFFEA00' } };
+    cell.alignment = { vertical: 'middle', horizontal: colNum === 1 ? 'left' : 'center' };
+    cell.border = {
+      top: { style: 'thin', color: { argb: 'FF333333' } },
+      left: { style: 'thin', color: { argb: 'FF333333' } },
+      bottom: { style: 'medium', color: { argb: 'FF333333' } },
+      right: { style: 'thin', color: { argb: 'FF333333' } }
+    };
+  });
+  summaryHeaderRow.getCell(1).alignment = { vertical: 'middle', horizontal: 'left' };
+
+  targetEmps.forEach(emp => {
+    const empRecords = rangeRecords.filter(a => a.employeeId === emp.id);
+    let fullPresent = 0, fullAbsent = 0, halfDays = 0;
+
+    empRecords.forEach(r => {
+      if (r.status === 'Present') fullPresent++;
+      else if (r.status === 'Absent') fullAbsent++;
+      else if (r.status === 'Half Day') halfDays++;
+    });
+
+    const presentCount = fullPresent + (halfDays * 0.5);
+    const absentCount = fullAbsent + (halfDays * 0.5);
+    const totalWorkingDays = presentCount + absentCount;
+
+    let attPercentage = '0.0%';
+    if (totalWorkingDays > 0) {
+      attPercentage = `${((presentCount / totalWorkingDays) * 100).toFixed(1)}%`;
+    }
+
+    const sRow = worksheet.addRow([
+      emp.name.toUpperCase(),
+      totalWorkingDays,
+      presentCount % 1 === 0 ? presentCount : presentCount.toFixed(1),
+      absentCount % 1 === 0 ? absentCount : absentCount.toFixed(1),
+      attPercentage
+    ]);
+    sRow.height = 22;
+
+    sRow.eachCell((cell, colNum) => {
+      cell.alignment = { vertical: 'middle', horizontal: colNum === 1 ? 'left' : 'center' };
+      cell.font = { name: 'Calibri', size: 10, bold: (colNum === 1 || colNum === 5) };
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+        left: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+        bottom: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+        right: { style: 'thin', color: { argb: 'FFCCCCCC' } }
+      };
+      if (colNum === 1) {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFEA00' } };
+      }
+    });
+  });
+
+  return await workbook.xlsx.writeBuffer();
+}
+
+// 12. Export Custom Date Range & Quarter Excel Report (.xlsx)
+app.get('/api/export/custom-excel', async (req, res) => {
+  try {
+    let { startDate, endDate, rangePreset, year } = req.query;
+    const currentYear = year || new Date().getFullYear();
+
+    if (rangePreset) {
+      if (rangePreset === 'Q1') { startDate = `${currentYear}-01-01`; endDate = `${currentYear}-03-31`; }
+      else if (rangePreset === 'Q2') { startDate = `${currentYear}-04-01`; endDate = `${currentYear}-06-30`; }
+      else if (rangePreset === 'Q3') { startDate = `${currentYear}-07-01`; endDate = `${currentYear}-09-30`; }
+      else if (rangePreset === 'Q4') { startDate = `${currentYear}-10-01`; endDate = `${currentYear}-12-31`; }
+      else if (rangePreset === 'YTD') { startDate = `${currentYear}-01-01`; endDate = new Date().toISOString().split('T')[0]; }
+    }
+
+    if (!startDate || !endDate) {
+      return res.status(400).json({ error: 'Start Date and End Date are required' });
+    }
+
+    const titleLabel = rangePreset || `${formatUSDate(startDate)} - ${formatUSDate(endDate)}`;
+    const buffer = await buildCustomRangeExcelBuffer(startDate, endDate, titleLabel);
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename=AR_Callers_Attendance_${startDate}_to_${endDate}.xlsx`);
+    res.send(buffer);
+  } catch (err) {
+    console.error('Custom Excel Export Error:', err);
+    res.status(500).json({ error: 'Failed to generate custom range Excel report' });
+  }
+});
+
+// 13. In-App Backup History List API
+app.get('/api/admin/backups/list', (req, res) => {
+  const currentDB = loadDB();
+  const list = [];
+
+  try {
+    if (fs.existsSync(BACKUP_DIR)) {
+      const files = fs.readdirSync(BACKUP_DIR).filter(f => f.endsWith('.json'));
+      files.forEach(filename => {
+        const fullPath = path.join(BACKUP_DIR, filename);
+        const stats = fs.statSync(fullPath);
+        let empCount = 0, attCount = 0, earliest = '', latest = '';
+        try {
+          const content = fs.readFileSync(fullPath, 'utf8');
+          const parsed = JSON.parse(content);
+          if (parsed && parsed.employees) empCount = parsed.employees.length;
+          if (parsed && parsed.attendance && Array.isArray(parsed.attendance)) {
+            attCount = parsed.attendance.length;
+            const dates = parsed.attendance.map(a => a.date).filter(Boolean).sort();
+            if (dates.length > 0) {
+              earliest = dates[0];
+              latest = dates[dates.length - 1];
+            }
+          }
+        } catch (e) {}
+
+        list.push({
+          filename,
+          sizeBytes: stats.size,
+          sizeKb: Math.round(stats.size / 1024),
+          modifiedAt: stats.mtime.toISOString(),
+          empCount,
+          attCount,
+          earliestDate: formatUSDate(earliest),
+          latestDate: formatUSDate(latest),
+          isMaster: filename === 'db_master_archive.json'
+        });
+      });
+    }
+  } catch (err) {}
+
+  list.sort((a, b) => new Date(b.modifiedAt) - new Date(a.modifiedAt));
+
+  res.json({
+    activeDB: {
+      employees: currentDB.employees ? currentDB.employees.length : 0,
+      attendance: currentDB.attendance ? currentDB.attendance.length : 0
+    },
+    backups: list
+  });
+});
+
+// 14. 1-Click Backup Restore API (with automatic safety pre-restore snapshot)
+app.post('/api/admin/backups/restore', (req, res) => {
+  const { filename } = req.body;
+  if (!filename) {
+    return res.status(400).json({ error: 'Filename is required' });
+  }
+
+  const targetPath = path.join(BACKUP_DIR, filename);
+  if (!fs.existsSync(targetPath)) {
+    return res.status(404).json({ error: `Backup file ${filename} not found` });
+  }
+
+  try {
+    const currentDB = loadDB(true);
+    const safetyPath = path.join(BACKUP_DIR, `db_snapshot_pre_restore_${Date.now()}.json`);
+    fs.writeFileSync(safetyPath, JSON.stringify(currentDB, null, 2), 'utf8');
+
+    const content = fs.readFileSync(targetPath, 'utf8');
+    const restoredDB = JSON.parse(content);
+
+    if (!restoredDB || !Array.isArray(restoredDB.employees) || !Array.isArray(restoredDB.attendance)) {
+      return res.status(400).json({ error: 'Invalid backup file structure' });
+    }
+
+    saveDB(restoredDB);
+    cachedDB = restoredDB;
+
+    res.json({
+      success: true,
+      message: `Database successfully restored to ${filename}! Loaded ${restoredDB.attendance.length} attendance logs and ${restoredDB.employees.length} callers. Mandatory pre-restore snapshot saved.`,
+      recordsCount: restoredDB.attendance.length,
+      employeeCount: restoredDB.employees.length
+    });
+  } catch (err) {
+    console.error('Error restoring backup:', err);
+    res.status(500).json({ error: 'Restore failed: ' + err.message });
+  }
+});
+
+// Nightly Automatic Backup Scheduler (Runs every 24 hours)
+setInterval(() => {
+  try {
+    const db = loadDB();
+    saveDB(db);
+    console.log(`[Nightly Scheduler] Automated daily backup snapshot & master archive synced.`);
+  } catch (err) {}
+}, 24 * 60 * 60 * 1000);
+
 app.listen(PORT, () => {
   console.log(`====================================================`);
   console.log(`🚀 AR Callers Attendance Portal running on port ${PORT}`);
