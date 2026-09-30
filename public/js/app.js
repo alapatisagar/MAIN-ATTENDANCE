@@ -350,6 +350,9 @@ function renderAttendanceTable() {
     const isHalfDay = emp.status === 'Half Day';
     const isOff = (emp.status === 'Holiday / Off' || emp.status === 'On Leave');
 
+    const pCount = emp.monthlyPresent || 0;
+    const aCount = emp.monthlyAbsent || 0;
+
     return `
       <tr>
         <td>
@@ -361,8 +364,15 @@ function renderAttendanceTable() {
             </div>
           </div>
         </td>
-        <td>
-          <span class="dept-badge"><i class="fa-solid fa-headset text-yellow"></i> AR Callers</span>
+        <td class="text-center">
+          <div style="display: flex; gap: 6px; justify-content: center; align-items: center; flex-wrap: wrap;">
+            <span style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); padding: 4px 8px; border-radius: 6px; font-size: 0.8rem; font-weight: 700;" title="Total Present days this month">
+              <i class="fa-solid fa-circle-check"></i> ${pCount} Present
+            </span>
+            <span style="background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); padding: 4px 8px; border-radius: 6px; font-size: 0.8rem; font-weight: 700;" title="Total Absent days this month">
+              <i class="fa-solid fa-circle-xmark"></i> ${aCount} Absent
+            </span>
+          </div>
         </td>
         <td>
           <div class="status-btn-group">
@@ -453,7 +463,15 @@ async function handleMarkAttendance(employeeId, status) {
   // Optimistic UI update
   const rec = state.records.find(r => r.employeeId === employeeId);
   if (rec) {
+    const oldStatus = rec.status;
     rec.status = status;
+
+    if (oldStatus === 'Present' && status !== 'Present') rec.monthlyPresent = Math.max(0, (rec.monthlyPresent || 0) - 1);
+    if (oldStatus === 'Absent' && status !== 'Absent') rec.monthlyAbsent = Math.max(0, (rec.monthlyAbsent || 0) - 1);
+
+    if (status === 'Present' && oldStatus !== 'Present') rec.monthlyPresent = (rec.monthlyPresent || 0) + 1;
+    if (status === 'Absent' && oldStatus !== 'Absent') rec.monthlyAbsent = (rec.monthlyAbsent || 0) + 1;
+
     renderAttendanceTable();
     updateStatsSummary();
   }

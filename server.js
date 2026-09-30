@@ -1124,13 +1124,29 @@ app.get('/api/attendance', (req, res) => {
   const dayOfWeek = dateObj.getDay();
   const isWeekend = (dayOfWeek === 0 || dayOfWeek === 6);
 
+  const monthPrefix = targetDate.substring(0, 7);
+  const monthRecords = (db.attendance || []).filter(a => a.date && a.date.startsWith(monthPrefix));
+
   // Return non-archived employees, or employees who have attendance recorded for targetDate
   const targetEmps = db.employees.filter(e => !e.isArchived || (db.attendance || []).some(a => a.employeeId === e.id && a.date === targetDate));
   sortNumerically(targetEmps);
 
   const records = targetEmps.map(emp => {
     const att = (db.attendance || []).find(a => a.employeeId === emp.id && a.date === targetDate);
-    
+    const empMonthLogs = monthRecords.filter(a => a.employeeId === emp.id);
+
+    let monthlyPresent = 0;
+    let monthlyAbsent = 0;
+    let monthlyHalfDay = 0;
+    let monthlyOff = 0;
+
+    empMonthLogs.forEach(a => {
+      if (a.status === 'Present') monthlyPresent++;
+      else if (a.status === 'Absent') monthlyAbsent++;
+      else if (a.status === 'Half Day') monthlyHalfDay++;
+      else if (a.status === 'Holiday / Off' || a.status === 'On Leave') monthlyOff++;
+    });
+
     let status = att ? att.status : 'Unmarked';
 
     return {
@@ -1140,6 +1156,10 @@ app.get('/api/attendance', (req, res) => {
       avatarColor: emp.avatarColor,
       date: targetDate,
       status,
+      monthlyPresent,
+      monthlyAbsent,
+      monthlyHalfDay,
+      monthlyOff,
       notes: att ? (att.notes || '') : ''
     };
   });
@@ -1442,9 +1462,8 @@ async function buildMonthlyExcelBuffer(monthQuery) {
   };
   bannerCell.alignment = { vertical: 'middle', horizontal: 'left' };
 
-  // Summary Table Column Headers
+  // Summary Table Column Headers (Only Employee Names - No DBS IDs)
   const summaryHeaderRow = worksheet.addRow([
-    'DBS ID',
     'EMPLOYEE NAME',
     'DAYS PRESENT',
     'DAYS ABSENT',
@@ -1456,7 +1475,6 @@ async function buildMonthlyExcelBuffer(monthQuery) {
   summaryHeaderRow.height = 26;
 
   const headerColors = [
-    'FF00A4E4', // DBS ID (Cyan)
     'FFFFEA00', // Employee Name (Yellow)
     'FF10B981', // Days Present (Green)
     'FFEF4444', // Days Absent (Red)
@@ -1467,7 +1485,7 @@ async function buildMonthlyExcelBuffer(monthQuery) {
   ];
 
   summaryHeaderRow.eachCell((cell, colNum) => {
-    const bgColor = headerColors[colNum - 1] || 'FF00A4E4';
+    const bgColor = headerColors[colNum - 1] || 'FFFFEA00';
     const isDark = (bgColor !== 'FFFFEA00');
 
     cell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: isDark ? 'FFFFFFFF' : 'FF000000' } };
@@ -1484,7 +1502,7 @@ async function buildMonthlyExcelBuffer(monthQuery) {
       right: { style: 'thin', color: { argb: 'FF333333' } }
     };
   });
-  summaryHeaderRow.getCell(2).alignment = { vertical: 'middle', horizontal: 'left' };
+  summaryHeaderRow.getCell(1).alignment = { vertical: 'middle', horizontal: 'left' };
 
   // Populate Summary Table Data Rows
   targetEmps.forEach(emp => {
@@ -1515,7 +1533,6 @@ async function buildMonthlyExcelBuffer(monthQuery) {
     }
 
     const sRow = worksheet.addRow([
-      emp.id,
       emp.name.toUpperCase(),
       presentCount,
       absentCount,
@@ -1527,8 +1544,8 @@ async function buildMonthlyExcelBuffer(monthQuery) {
     sRow.height = 22;
 
     sRow.eachCell((cell, colNum) => {
-      cell.alignment = { vertical: 'middle', horizontal: colNum === 2 ? 'left' : 'center' };
-      cell.font = { name: 'Calibri', size: 10, bold: (colNum === 1 || colNum === 2 || colNum === 8) };
+      cell.alignment = { vertical: 'middle', horizontal: colNum === 1 ? 'left' : 'center' };
+      cell.font = { name: 'Calibri', size: 10, bold: (colNum === 1 || colNum === 7) };
       cell.border = {
         top: { style: 'thin', color: { argb: 'FFCCCCCC' } },
         left: { style: 'thin', color: { argb: 'FFCCCCCC' } },
@@ -1536,7 +1553,7 @@ async function buildMonthlyExcelBuffer(monthQuery) {
         right: { style: 'thin', color: { argb: 'FFCCCCCC' } }
       };
 
-      if (colNum === 2) {
+      if (colNum === 1) {
         cell.fill = {
           type: 'pattern',
           pattern: 'solid',
