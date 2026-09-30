@@ -722,12 +722,14 @@ async function sendEmailBackup(recipientOverride = null) {
   const settings = (dbData.settings && dbData.settings.email) ? dbData.settings.email : {};
   const recipient = recipientOverride || settings.recipientEmail || BACKUP_RECIPIENT_EMAIL;
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  const nowUs = new Date();
+  const usDateStr = nowUs.toLocaleDateString('en-US', { timeZone: 'America/New_York' });
+  const todayStr = nowUs.toLocaleDateString('en-US', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' }).split('/').join('-');
   const empCount = dbData.employees ? dbData.employees.length : 0;
   const attCount = dbData.attendance ? dbData.attendance.length : 0;
 
-  const mailSubject = `[AR Callers Portal] Daily Attendance Backup - ${todayStr}`;
-  const mailBody = `Hello Sagar Alapati,\n\nAttached is your automated daily attendance backup for the AR Callers Attendance Portal.\n\nBackup Summary (${todayStr}):\n- Total AR Callers: ${empCount}\n- Total Attendance Records: ${attCount}\n- Date Generated: ${new Date().toLocaleString()}\n\nThis file can be directly imported into your Portal anytime using the "Import Backup File" option.\n\nBest regards,\nAR Callers Attendance Portal System`;
+  const mailSubject = `[AR Callers Portal] Daily Attendance Backup - ${usDateStr}`;
+  const mailBody = `Hello Sagar Alapati,\n\nAttached is your automated daily attendance backup for the AR Callers Attendance Portal.\n\nBackup Summary (US Date: ${usDateStr}):\n- Total AR Callers: ${empCount}\n- Total Attendance Records: ${attCount}\n- Date Generated (US Eastern Time): ${nowUs.toLocaleString('en-US', { timeZone: 'America/New_York' })}\n\nThis file can be directly imported into your Portal anytime using the "Import Backup File" option.\n\nBest regards,\nAR Callers Attendance Portal System`;
 
   const webAppUrl = (settings.webAppUrl || process.env.GOOGLE_WEBAPP_URL || '').trim();
   const resendApiKey = (settings.resendApiKey || process.env.RESEND_API_KEY || '').trim();
@@ -1335,7 +1337,9 @@ async function buildMonthlyExcelBuffer(monthQuery) {
   for (let d = 1; d <= totalDaysInMonth; d++) {
     const dateObj = new Date(year, monthIdx, d);
     const dayOfWeek = dateObj.getDay();
-    headerRowValues.push(`${d} (${weekdayNames[dayOfWeek]})`);
+    const mStr = String(monthIdx + 1).padStart(2, '0');
+    const dStr = String(d).padStart(2, '0');
+    headerRowValues.push(`${mStr}/${dStr}/${year} (${weekdayNames[dayOfWeek]})`);
   }
 
   const row1 = worksheet.addRow(headerRowValues);
@@ -1343,7 +1347,7 @@ async function buildMonthlyExcelBuffer(monthQuery) {
 
   // Style Header Row 1 (Cyan/Blue Background #00A4E4, Bold White Text)
   row1.eachCell((cell) => {
-    cell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
     cell.fill = {
       type: 'pattern',
       pattern: 'solid',
@@ -1361,7 +1365,7 @@ async function buildMonthlyExcelBuffer(monthQuery) {
 
   worksheet.getColumn(1).width = 32;
   for (let c = 2; c <= totalDaysInMonth + 1; c++) {
-    worksheet.getColumn(c).width = 9;
+    worksheet.getColumn(c).width = 16;
   }
 
   // Populate Employee Rows for Table 1

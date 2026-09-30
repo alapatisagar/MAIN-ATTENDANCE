@@ -34,12 +34,50 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function getTodayIsoString() {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, '0');
-  const d = String(now.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
+  try {
+    const options = { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' };
+    const formatter = new Intl.DateTimeFormat('en-US', options);
+    const parts = formatter.formatToParts(new Date());
+    let month = '01', day = '01', year = '2026';
+    for (const part of parts) {
+      if (part.type === 'month') month = part.value;
+      if (part.type === 'day') day = part.value;
+      if (part.type === 'year') year = part.value;
+    }
+    return `${year}-${month}-${day}`;
+  } catch (e) {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
 }
+
+function getUSIsoDateStringForOffset(offsetDays = 0) {
+  try {
+    const now = new Date();
+    now.setDate(now.getDate() + offsetDays);
+    const options = { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' };
+    const formatter = new Intl.DateTimeFormat('en-US', options);
+    const parts = formatter.formatToParts(now);
+    let month = '01', day = '01', year = '2026';
+    for (const part of parts) {
+      if (part.type === 'month') month = part.value;
+      if (part.type === 'day') day = part.value;
+      if (part.type === 'year') year = part.value;
+    }
+    return `${year}-${month}-${day}`;
+  } catch (e) {
+    const now = new Date();
+    now.setDate(now.getDate() + offsetDays);
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+}
+
 
 function initApp() {
   const today = getTodayIsoString();
@@ -210,11 +248,11 @@ function changeDateByOffset(offsetDays) {
   const m = parseInt(parts[1], 10) - 1;
   const d = parseInt(parts[2], 10);
 
-  const dateObj = new Date(y, m, d + offsetDays);
+  const dateObj = new Date(Date.UTC(y, m, d + offsetDays));
 
-  const resY = dateObj.getFullYear();
-  const resM = String(dateObj.getMonth() + 1).padStart(2, '0');
-  const resD = String(dateObj.getDate()).padStart(2, '0');
+  const resY = dateObj.getUTCFullYear();
+  const resM = String(dateObj.getUTCMonth() + 1).padStart(2, '0');
+  const resD = String(dateObj.getUTCDate()).padStart(2, '0');
   const newDateStr = `${resY}-${resM}-${resD}`;
 
   state.selectedDate = newDateStr;
@@ -226,14 +264,10 @@ function changeDateByOffset(offsetDays) {
 }
 
 function jumpToDate(target) {
-  const dateObj = new Date();
+  let dateStr = getTodayIsoString();
   if (target === 'yesterday') {
-    dateObj.setDate(dateObj.getDate() - 1);
+    dateStr = getUSIsoDateStringForOffset(-1);
   }
-  const resY = dateObj.getFullYear();
-  const resM = String(dateObj.getMonth() + 1).padStart(2, '0');
-  const resD = String(dateObj.getDate()).padStart(2, '0');
-  const dateStr = `${resY}-${resM}-${resD}`;
 
   state.selectedDate = dateStr;
   sessionStorage.setItem('arcallers_active_date', dateStr);
@@ -264,6 +298,7 @@ function setFilterTab(filterName) {
 
 function formatUSDate(dateStr) {
   if (!dateStr) return '';
+  if (dateStr.includes('/')) return dateStr;
   const parts = dateStr.split('-');
   if (parts.length !== 3) return dateStr;
   return `${parts[1]}/${parts[2]}/${parts[0]}`; // MM/DD/YYYY format
@@ -278,16 +313,16 @@ async function fetchAttendanceForDate() {
   const m = parseInt(parts[1], 10) - 1;
   const d = parseInt(parts[2], 10);
 
-  const dateObj = new Date(y, m, d);
-  const usDateNum = `${parts[1]}/${parts[2]}/${parts[0]}`;
-  const formattedDate = dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
-  const dayOfWeek = dateObj.getDay();
+  const dateObj = new Date(Date.UTC(y, m, d));
+  const usDateNum = `${parts[1]}/${parts[2]}/${parts[0]}`; // MM/DD/YYYY
+  const formattedDate = dateObj.toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+  const dayOfWeek = dateObj.getUTCDay();
   const isWeekend = (dayOfWeek === 0 || dayOfWeek === 6);
   state.isWeekend = isWeekend;
 
   const dateBadge = document.getElementById('currentDateBadge');
   if (dateBadge) {
-    dateBadge.textContent = isWeekend ? `Date: ${usDateNum} (${formattedDate} - Weekend Off)` : `Date: ${usDateNum} (${formattedDate})`;
+    dateBadge.textContent = isWeekend ? `US Date (MM/DD/YYYY): ${usDateNum} (${formattedDate} - Weekend Off)` : `US Date (MM/DD/YYYY): ${usDateNum} (${formattedDate})`;
     dateBadge.className = isWeekend ? 'date-badge date-badge-weekend' : 'date-badge';
   }
 
