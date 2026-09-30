@@ -1462,25 +1462,21 @@ async function buildMonthlyExcelBuffer(monthQuery) {
   };
   bannerCell.alignment = { vertical: 'middle', horizontal: 'left' };
 
-  // Summary Table Column Headers (Only Employee Names - No DBS IDs)
+  // Summary Table Column Headers
   const summaryHeaderRow = worksheet.addRow([
     'EMPLOYEE NAME',
-    'DAYS PRESENT',
-    'DAYS ABSENT',
-    'HALF DAYS',
-    'HOLIDAY / OFF DAYS',
-    'TOTAL DAYS RECORDED',
-    'ATTENDANCE RATE (%)'
+    'TOTAL WORKING DAYS',
+    'NUMBER OF PRESENTS',
+    'NUMBER OF ABSENTS',
+    'ATTENDANCE PERCENTAGE (%)'
   ]);
   summaryHeaderRow.height = 26;
 
   const headerColors = [
     'FFFFEA00', // Employee Name (Yellow)
-    'FF10B981', // Days Present (Green)
-    'FFEF4444', // Days Absent (Red)
-    'FFA855F7', // Half Days (Purple)
-    'FF0EA5E9', // Off Days (Blue)
-    'FF4B5563', // Total Recorded (Gray)
+    'FF00A4E4', // Total Working Days (Cyan)
+    'FF10B981', // Number of Presents (Green)
+    'FFEF4444', // Number of Absents (Red)
     'FFF59E0B'  // Attendance Rate % (Gold/Yellow)
   ];
 
@@ -1508,44 +1504,39 @@ async function buildMonthlyExcelBuffer(monthQuery) {
   targetEmps.forEach(emp => {
     const empRecords = monthRecords.filter(a => a.employeeId === emp.id);
 
-    let presentCount = 0;
-    let absentCount = 0;
-    let halfDayCount = 0;
-    let holidayOffCount = 0;
+    let fullPresent = 0;
+    let fullAbsent = 0;
+    let halfDays = 0;
 
     empRecords.forEach(r => {
-      if (r.status === 'Present') presentCount++;
-      else if (r.status === 'Absent') absentCount++;
-      else if (r.status === 'Half Day') halfDayCount++;
-      else if (r.status === 'Holiday / Off' || r.status === 'On Leave') holidayOffCount++;
+      if (r.status === 'Present') fullPresent++;
+      else if (r.status === 'Absent') fullAbsent++;
+      else if (r.status === 'Half Day') halfDays++;
     });
 
-    const totalDaysRecorded = empRecords.length;
+    // Half days are calculated directly as 0.5 Present and 0.5 Absent
+    const presentCount = fullPresent + (halfDays * 0.5);
+    const absentCount = fullAbsent + (halfDays * 0.5);
+    const totalWorkingDays = presentCount + absentCount;
+
     let attPercentage = '0.0%';
-    if (totalDaysRecorded > 0) {
-      const workingDays = totalDaysRecorded - holidayOffCount;
-      if (workingDays > 0) {
-        const score = (presentCount + (halfDayCount * 0.5)) / workingDays * 100;
-        attPercentage = `${score.toFixed(1)}%`;
-      } else {
-        attPercentage = '100.0%';
-      }
+    if (totalWorkingDays > 0) {
+      const score = (presentCount / totalWorkingDays) * 100;
+      attPercentage = `${score.toFixed(1)}%`;
     }
 
     const sRow = worksheet.addRow([
       emp.name.toUpperCase(),
-      presentCount,
-      absentCount,
-      halfDayCount,
-      holidayOffCount,
-      totalDaysRecorded,
+      totalWorkingDays,
+      presentCount % 1 === 0 ? presentCount : presentCount.toFixed(1),
+      absentCount % 1 === 0 ? absentCount : absentCount.toFixed(1),
       attPercentage
     ]);
     sRow.height = 22;
 
     sRow.eachCell((cell, colNum) => {
       cell.alignment = { vertical: 'middle', horizontal: colNum === 1 ? 'left' : 'center' };
-      cell.font = { name: 'Calibri', size: 10, bold: (colNum === 1 || colNum === 7) };
+      cell.font = { name: 'Calibri', size: 10, bold: (colNum === 1 || colNum === 5) };
       cell.border = {
         top: { style: 'thin', color: { argb: 'FFCCCCCC' } },
         left: { style: 'thin', color: { argb: 'FFCCCCCC' } },
