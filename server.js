@@ -493,6 +493,32 @@ function loadDB(forceReload = false) {
   return db;
 }
 
+function getEmployeesForMonth(db, monthPrefix) {
+  const monthRecords = (db.attendance || []).filter(a => a.date && a.date.startsWith(monthPrefix));
+  if (monthRecords.length > 0) {
+    const empIdSet = new Set(monthRecords.map(a => a.employeeId));
+    const emps = db.employees.filter(e => empIdSet.has(e.id));
+    sortNumerically(emps);
+    return emps;
+  }
+  const emps = db.employees.filter(e => !e.isArchived);
+  sortNumerically(emps);
+  return emps;
+}
+
+function getEmployeesForDateRange(db, startDateStr, endDateStr) {
+  const rangeRecords = (db.attendance || []).filter(a => a.date && a.date >= startDateStr && a.date <= endDateStr);
+  if (rangeRecords.length > 0) {
+    const empIdSet = new Set(rangeRecords.map(a => a.employeeId));
+    const emps = db.employees.filter(e => empIdSet.has(e.id));
+    sortNumerically(emps);
+    return emps;
+  }
+  const emps = db.employees.filter(e => !e.isArchived);
+  sortNumerically(emps);
+  return emps;
+}
+
 // ---------------------------------------------------------
 // REST API ENDPOINTS
 // ---------------------------------------------------------
@@ -1129,9 +1155,8 @@ app.get('/api/attendance', (req, res) => {
   const monthPrefix = targetDate.substring(0, 7);
   const monthRecords = (db.attendance || []).filter(a => a.date && a.date.startsWith(monthPrefix));
 
-  // Return non-archived employees, or employees who have attendance recorded for targetDate
-  const targetEmps = db.employees.filter(e => !e.isArchived || (db.attendance || []).some(a => a.employeeId === e.id && a.date === targetDate));
-  sortNumerically(targetEmps);
+  // Return employees for target month/date separately
+  const targetEmps = getEmployeesForMonth(db, monthPrefix);
 
   const records = targetEmps.map(emp => {
     const att = (db.attendance || []).find(a => a.employeeId === emp.id && a.date === targetDate);
@@ -1231,7 +1256,7 @@ app.post('/api/attendance/mark-all', (req, res) => {
 
   if (!db.attendance) db.attendance = [];
 
-  const activeEmps = db.employees.filter(e => !e.isArchived);
+  const activeEmps = getEmployeesForMonth(db, date.substring(0, 7));
   activeEmps.forEach(emp => {
     const index = db.attendance.findIndex(a => a.employeeId === emp.id && a.date === date);
     if (index >= 0) {
@@ -1270,7 +1295,7 @@ app.post('/api/attendance/auto-present-remaining', (req, res) => {
   if (!db.attendance) db.attendance = [];
 
   let count = 0;
-  const activeEmps = db.employees.filter(e => !e.isArchived);
+  const activeEmps = getEmployeesForMonth(db, date.substring(0, 7));
   activeEmps.forEach(emp => {
     const existing = db.attendance.find(a => a.employeeId === emp.id && a.date === date);
     if (!existing || existing.status === 'Unmarked') {
@@ -1324,9 +1349,8 @@ async function buildMonthlyExcelBuffer(monthQuery) {
   const attendanceList = db.attendance || [];
   const monthRecords = attendanceList.filter(a => a.date && a.date.startsWith(monthQuery));
 
-  // Include active and archived employees who have records for this month
-  const targetEmps = db.employees.filter(e => !e.isArchived || monthRecords.some(r => r.employeeId === e.id));
-  sortNumerically(targetEmps);
+  // Include only employees active in this specific month
+  const targetEmps = getEmployeesForMonth(db, monthQuery);
 
   // ---------------------------------------------------------
   // TABLE 1: DAILY MONTHLY ATTENDANCE GRID (TOP TABLE)
@@ -1582,9 +1606,7 @@ app.get('/api/admin/monthly-summary', (req, res) => {
   const monthQuery = req.query.month || new Date().toISOString().substring(0, 7);
 
   const attendanceList = db.attendance || [];
-  const monthRecords = attendanceList.filter(a => a.date && a.date.startsWith(monthQuery));
-  const targetEmps = db.employees.filter(e => !e.isArchived || monthRecords.some(r => r.employeeId === e.id));
-  sortNumerically(targetEmps);
+  const targetEmps = getEmployeesForMonth(db, monthQuery);
 
   const summary = targetEmps.map(emp => {
     const empRecords = monthRecords.filter(a => a.employeeId === emp.id);
@@ -1683,8 +1705,7 @@ async function buildCustomRangeExcelBuffer(startDateStr, endDateStr, titleLabel 
   const attendanceList = db.attendance || [];
   const rangeRecords = attendanceList.filter(a => a.date && a.date >= startDateStr && a.date <= endDateStr);
 
-  const targetEmps = db.employees.filter(e => !e.isArchived || rangeRecords.some(r => r.employeeId === e.id));
-  sortNumerically(targetEmps);
+  const targetEmps = getEmployeesForDateRange(db, startDateStr, endDateStr);
 
   // Table 1: Daily Grid
   const weekdayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
