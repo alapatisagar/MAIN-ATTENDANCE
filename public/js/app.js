@@ -1413,14 +1413,45 @@ function toggleVoiceAudioFeedback() {
   showToast(`Voice Audio Feedback: ${state.enableVoiceAudio ? 'ENABLED' : 'DISABLED'}`, 'info');
 }
 
+function formatUSSpokenDate(dateIsoStr) {
+  if (!dateIsoStr) return '';
+  const parts = dateIsoStr.split('-');
+  if (parts.length !== 3) return dateIsoStr;
+
+  const year = parseInt(parts[0], 10);
+  const monthIdx = parseInt(parts[1], 10) - 1;
+  const day = parseInt(parts[2], 10);
+
+  const monthNames = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+  const monthName = monthNames[monthIdx] || '';
+
+  let suffix = 'th';
+  if (day % 10 === 1 && day !== 11) suffix = 'st';
+  else if (day % 10 === 2 && day !== 12) suffix = 'nd';
+  else if (day % 10 === 3 && day !== 13) suffix = 'rd';
+
+  return `${monthName} ${day}${suffix}, ${year}`;
+}
+
 function speakVoiceConfirmation(text) {
   if (!state.enableVoiceAudio || !('speechSynthesis' in window)) return;
   try {
     window.speechSynthesis.cancel();
     const utter = new SpeechSynthesisUtterance(text);
-    utter.rate = 1.0;
+    utter.rate = 0.95;
     utter.pitch = 1.0;
-    utter.lang = 'en-IN';
+    utter.lang = 'en-US';
+
+    const voices = window.speechSynthesis.getVoices();
+    const naturalVoice = voices.find(v => 
+      v.lang.replace('_', '-').startsWith('en-US') && 
+      (v.name.includes('Natural') || v.name.includes('Neural') || v.name.includes('Google US English') || v.name.includes('Samantha') || v.name.includes('Zira'))
+    );
+    if (naturalVoice) utter.voice = naturalVoice;
+
     window.speechSynthesis.speak(utter);
   } catch (e) {}
 }
@@ -1428,7 +1459,7 @@ function speakVoiceConfirmation(text) {
 function playSweetAdminGreeting(userName, dateIso) {
   if (!('speechSynthesis' in window)) return;
 
-  const dateFormatted = formatUSDate(dateIso || new Date().toISOString().split('T')[0]);
+  const dateSpoken = formatUSSpokenDate(dateIso || new Date().toISOString().split('T')[0]);
 
   let adminDisplayName = userName || 'Admin';
   const norm = adminDisplayName.toUpperCase();
@@ -1438,40 +1469,51 @@ function playSweetAdminGreeting(userName, dateIso) {
     adminDisplayName = 'Vijaya Sai Krishna Keerthi';
   }
 
-  const textToSpeak = `Welcome ${adminDisplayName}! Please mark your attendance for ${dateFormatted}.`;
+  const textToSpeak = `Welcome ${adminDisplayName}! Please mark your attendance for ${dateSpoken}.`;
 
   try {
     window.speechSynthesis.cancel();
     const utter = new SpeechSynthesisUtterance(textToSpeak);
-    utter.rate = 0.95;  // Friendly, gentle speed
-    utter.pitch = 1.30; // Cute, sweet female voice pitch
+    utter.rate = 0.92;   // Natural, realistic human speaking cadence
+    utter.pitch = 1.0;   // Natural human pitch (no artificial AI tone)
     utter.volume = 1.0;
+    utter.lang = 'en-US'; // American English accent & date format
 
-    const findFemaleVoice = () => {
+    const findRealisticUSFemaleVoice = () => {
       const voices = window.speechSynthesis.getVoices();
       if (!voices || voices.length === 0) return null;
 
-      // Match sweet female voices
-      return voices.find(v => 
-        (v.name.includes('Zira') || v.name.includes('Heera') || v.name.includes('Female') || 
-         v.name.includes('Google UK English Female') || v.name.includes('Samantha') || 
-         v.name.includes('Victoria') || v.name.includes('Karen') || v.name.includes('Natural'))
-      ) || voices.find(v => v.lang.startsWith('en'));
+      // 1. Natural / Neural US English Female Voices (Most realistic human voice)
+      const naturalUs = voices.find(v => 
+        (v.lang.replace('_', '-').startsWith('en-US') || v.lang.startsWith('en')) && 
+        (v.name.includes('Natural') || v.name.includes('Neural') || v.name.includes('Jenny') || v.name.includes('Aria') || v.name.includes('Online'))
+      );
+      if (naturalUs) return naturalUs;
+
+      // 2. Google US English / Apple Samantha / Victoria / Zira Female Voices
+      const premiumUs = voices.find(v => 
+        (v.lang.replace('_', '-').startsWith('en-US') || v.lang.startsWith('en')) && 
+        (v.name.includes('Google US English') || v.name.includes('Samantha') || v.name.includes('Ava') || v.name.includes('Victoria') || v.name.includes('Zira') || v.name.includes('Female'))
+      );
+      if (premiumUs) return premiumUs;
+
+      // 3. Fallback to any US English voice
+      return voices.find(v => v.lang.replace('_', '-').startsWith('en-US')) || voices.find(v => v.lang.startsWith('en'));
     };
 
-    const targetVoice = findFemaleVoice();
+    const targetVoice = findRealisticUSFemaleVoice();
     if (targetVoice) utter.voice = targetVoice;
 
     if (window.speechSynthesis.getVoices().length === 0) {
       window.speechSynthesis.onvoiceschanged = () => {
-        const v = findFemaleVoice();
+        const v = findRealisticUSFemaleVoice();
         if (v) utter.voice = v;
         window.speechSynthesis.speak(utter);
       };
     } else {
       setTimeout(() => {
         window.speechSynthesis.speak(utter);
-      }, 300);
+      }, 350);
     }
   } catch (e) {
     console.error('Voice Greeting Error:', e);
