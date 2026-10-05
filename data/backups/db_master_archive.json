@@ -136366,5 +136366,13 @@
       "reason": "Personal family work",
       "status": "Approved"
     }
-  ]
+  ],
+  "settings": {
+    "email": {
+      "recipientEmail": "sagaralapati3695@gmail.com",
+      "autoBackupEnabled": true,
+      "smtpHost": "smtp.gmail.com",
+      "smtpPort": 587
+    }
+  }
 }

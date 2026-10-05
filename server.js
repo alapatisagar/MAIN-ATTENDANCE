@@ -781,12 +781,12 @@ async function sendEmailBackup(recipientOverride = null) {
     const jsonContent = fs.readFileSync(backupFile, 'utf8');
     const scriptRes = await sendEmailViaGoogleScript(webAppUrl, recipient, mailSubject, mailBody, jsonContent, fileName);
 
+    if (!dbData.settings) dbData.settings = {};
+    if (!dbData.settings.email) dbData.settings.email = {};
+    dbData.settings.email.lastSentAt = new Date().toISOString();
+
     if (scriptRes && scriptRes.success) {
       console.log(`[Backup Email] Google Script Relay delivered backup to ${recipient}`);
-
-      if (!dbData.settings) dbData.settings = {};
-      if (!dbData.settings.email) dbData.settings.email = {};
-      dbData.settings.email.lastSentAt = new Date().toISOString();
       dbData.settings.email.lastStatus = `Success (Delivered via Google Web App Relay to ${recipient})`;
       saveDB(dbData);
       lastEmailBackupDate = todayStr;
@@ -798,7 +798,18 @@ async function sendEmailBackup(recipientOverride = null) {
         message: `Daily attendance backup successfully sent to ${recipient} via Google Web App Relay!`
       };
     } else {
-      console.warn('[Backup Email] Google Script Relay notice:', scriptRes.message);
+      const errMsg = (scriptRes && scriptRes.message) || 'Google Web App connection failed';
+      console.warn('[Backup Email] Google Script Relay notice:', errMsg);
+      dbData.settings.email.lastStatus = `Google Web App Notice: ${errMsg}`;
+      saveDB(dbData);
+
+      return {
+        success: false,
+        sentEmail: false,
+        requiresConfig: false,
+        error: `Google Web App Notice: ${errMsg}. Please ensure your Web App is deployed with "Who has access" set to "Anyone" in Google Apps Script!`,
+        backupFile
+      };
     }
   }
 

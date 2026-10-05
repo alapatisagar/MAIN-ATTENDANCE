@@ -664,6 +664,23 @@ async function triggerSendTestEmail() {
     btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Sending Test Email...`;
   }
   try {
+    const recipientInput = document.getElementById('settingRecipientEmail');
+    const webAppUrlInput = document.getElementById('settingWebAppUrl');
+
+    const recipientEmail = recipientInput ? recipientInput.value.trim() : 'sagaralapati3695@gmail.com';
+    const webAppUrl = webAppUrlInput ? webAppUrlInput.value.trim() : '';
+
+    // Auto-save settings to server first so Web App URL is active immediately
+    await fetch(`${API_BASE}/admin/email-settings`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        recipientEmail,
+        webAppUrl,
+        autoBackupEnabled: true
+      })
+    });
+
     await handleSendEmailBackup();
     await loadEmailSettingsIntoModal();
   } finally {
