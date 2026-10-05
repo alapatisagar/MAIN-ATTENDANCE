@@ -963,7 +963,7 @@ async function sendEmailBackup(recipientOverride = null) {
       if (!dbData.settings) dbData.settings = {};
       if (!dbData.settings.email) dbData.settings.email = {};
       dbData.settings.email.lastSentAt = new Date().toISOString();
-      dbData.settings.email.lastStatus = `Success (Delivered to ${recipient} via HTTPS Relay)`;
+      dbData.settings.email.lastStatus = `Success (Dispatched via HTTPS Relay to ${recipient} - Check Gmail Spam/Promotions for 1-time "Activate Form" link)`;
       saveDB(dbData);
       lastEmailBackupDate = todayStr;
 
@@ -971,7 +971,7 @@ async function sendEmailBackup(recipientOverride = null) {
         success: true,
         sentEmail: true,
         relayType: 'HTTPS',
-        message: `Daily attendance backup successfully sent to ${recipient} via HTTPS Relay!`
+        message: `Daily attendance backup dispatched to ${recipient}! Please check your Gmail Inbox, Spam, or Promotions tab for a 1-time activation email titled "Confirm your form submission" and click "Activate Form" once to complete setup.`
       };
     }
   } catch (httpsErr) {}
