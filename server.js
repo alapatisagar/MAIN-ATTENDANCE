@@ -1606,6 +1606,7 @@ app.get('/api/admin/monthly-summary', (req, res) => {
   const monthQuery = req.query.month || new Date().toISOString().substring(0, 7);
 
   const attendanceList = db.attendance || [];
+  const monthRecords = attendanceList.filter(a => a.date && a.date.startsWith(monthQuery));
   const targetEmps = getEmployeesForMonth(db, monthQuery);
 
   const summary = targetEmps.map(emp => {
