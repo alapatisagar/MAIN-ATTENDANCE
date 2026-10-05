@@ -167,6 +167,7 @@ async function handleAdminLogin(e) {
 
     showToast(`Welcome ${data.user.name}! Logged in as Admin.`, 'success');
     showAppScreen();
+    playSweetAdminGreeting(data.user.name, state.selectedDate);
   } catch (err) {
     showToast('Network error during login', 'error');
   }
@@ -1422,6 +1423,59 @@ function speakVoiceConfirmation(text) {
     utter.lang = 'en-IN';
     window.speechSynthesis.speak(utter);
   } catch (e) {}
+}
+
+function playSweetAdminGreeting(userName, dateIso) {
+  if (!('speechSynthesis' in window)) return;
+
+  const dateFormatted = formatUSDate(dateIso || new Date().toISOString().split('T')[0]);
+
+  let adminDisplayName = userName || 'Admin';
+  const norm = adminDisplayName.toUpperCase();
+  if (norm.includes('SAGAR')) {
+    adminDisplayName = 'Sagar Alapati';
+  } else if (norm.includes('VIJAYA') || norm.includes('KEERTHI')) {
+    adminDisplayName = 'Vijaya Sai Krishna Keerthi';
+  }
+
+  const textToSpeak = `Welcome ${adminDisplayName}! Please mark your attendance for ${dateFormatted}.`;
+
+  try {
+    window.speechSynthesis.cancel();
+    const utter = new SpeechSynthesisUtterance(textToSpeak);
+    utter.rate = 0.95;  // Friendly, gentle speed
+    utter.pitch = 1.30; // Cute, sweet female voice pitch
+    utter.volume = 1.0;
+
+    const findFemaleVoice = () => {
+      const voices = window.speechSynthesis.getVoices();
+      if (!voices || voices.length === 0) return null;
+
+      // Match sweet female voices
+      return voices.find(v => 
+        (v.name.includes('Zira') || v.name.includes('Heera') || v.name.includes('Female') || 
+         v.name.includes('Google UK English Female') || v.name.includes('Samantha') || 
+         v.name.includes('Victoria') || v.name.includes('Karen') || v.name.includes('Natural'))
+      ) || voices.find(v => v.lang.startsWith('en'));
+    };
+
+    const targetVoice = findFemaleVoice();
+    if (targetVoice) utter.voice = targetVoice;
+
+    if (window.speechSynthesis.getVoices().length === 0) {
+      window.speechSynthesis.onvoiceschanged = () => {
+        const v = findFemaleVoice();
+        if (v) utter.voice = v;
+        window.speechSynthesis.speak(utter);
+      };
+    } else {
+      setTimeout(() => {
+        window.speechSynthesis.speak(utter);
+      }, 300);
+    }
+  } catch (e) {
+    console.error('Voice Greeting Error:', e);
+  }
 }
 
 /* ---------------------------------------------------------

@@ -360,6 +360,58 @@ function restoreFromBackup() {
   return null;
 }
 
+function mergeAllBackupsAndDB(db) {
+  if (!db) return db;
+  const allLogsMap = new Map();
+
+  // 1. Add current db attendance records
+  if (Array.isArray(db.attendance)) {
+    db.attendance.forEach(a => {
+      if (a && a.employeeId && a.date) allLogsMap.set(`${a.date}_${a.employeeId}`, a);
+    });
+  }
+
+  // 2. Add master backup file records
+  if (fs.existsSync(MASTER_BACKUP_FILE)) {
+    try {
+      const content = fs.readFileSync(MASTER_BACKUP_FILE, 'utf8');
+      const parsed = JSON.parse(content);
+      if (parsed && Array.isArray(parsed.attendance)) {
+        parsed.attendance.forEach(a => {
+          if (a && a.employeeId && a.date) {
+            const key = `${a.date}_${a.employeeId}`;
+            if (!allLogsMap.has(key)) allLogsMap.set(key, a);
+          }
+        });
+      }
+    } catch (e) {}
+  }
+
+  // 3. Add all snapshot backup json files
+  if (fs.existsSync(BACKUP_DIR)) {
+    try {
+      const files = fs.readdirSync(BACKUP_DIR).filter(f => f.endsWith('.json'));
+      files.forEach(f => {
+        try {
+          const content = fs.readFileSync(path.join(BACKUP_DIR, f), 'utf8');
+          const parsed = JSON.parse(content);
+          if (parsed && Array.isArray(parsed.attendance)) {
+            parsed.attendance.forEach(a => {
+              if (a && a.employeeId && a.date) {
+                const key = `${a.date}_${a.employeeId}`;
+                if (!allLogsMap.has(key)) allLogsMap.set(key, a);
+              }
+            });
+          }
+        } catch (e) {}
+      });
+    } catch (e) {}
+  }
+
+  db.attendance = Array.from(allLogsMap.values());
+  return db;
+}
+
 let cachedDB = null;
 
 function saveDB(data) {
@@ -373,19 +425,8 @@ function saveDB(data) {
     data.attendance = [];
   }
 
-  // Permanent Protection: Merge with existing on-disk records to guarantee zero data loss
-  if (fs.existsSync(DB_FILE)) {
-    try {
-      const existingContent = fs.readFileSync(DB_FILE, 'utf8');
-      const existingDB = JSON.parse(existingContent);
-      if (existingDB && Array.isArray(existingDB.attendance) && existingDB.attendance.length > data.attendance.length) {
-        const existingMap = new Map();
-        existingDB.attendance.forEach(a => existingMap.set(`${a.date}_${a.employeeId}`, a));
-        data.attendance.forEach(a => existingMap.set(`${a.date}_${a.employeeId}`, a));
-        data.attendance = Array.from(existingMap.values());
-      }
-    } catch (e) {}
-  }
+  // Merge with all backups to guarantee zero data loss
+  data = mergeAllBackupsAndDB(data);
 
   cachedDB = data;
 
@@ -423,6 +464,9 @@ function loadDB(forceReload = false) {
   if (!db || !db.employees || !Array.isArray(db.employees)) {
     db = getInitialData();
   }
+
+  // Merge all backups additively so no attendance log is ever lost
+  db = mergeAllBackupsAndDB(db);
 
   // Ensure attendance array exists and restore from backup if missing
   if (!db.attendance || !Array.isArray(db.attendance) || db.attendance.length === 0) {
@@ -1174,7 +1218,7 @@ app.get('/api/attendance', (req, res) => {
       else if (a.status === 'Holiday / Off' || a.status === 'On Leave') monthlyOff++;
     });
 
-    let status = att ? att.status : 'Unmarked';
+    let status = att ? att.status : (isWeekend ? 'Holiday / Off' : 'Unmarked');
 
     return {
       employeeId: emp.id,
