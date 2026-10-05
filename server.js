@@ -67,9 +67,10 @@ function sendEmailViaHTTPS(recipient, subject, body, attachmentJsonStr) {
 }
 
 // Google Apps Script Web App HTTPS Relay (Port 443 HTTPS - Free Gmail Dispatch on Cloud Hosts)
-function sendEmailViaGoogleScript(webAppUrl, recipient, subject, body, attachmentJsonStr, fileName) {
-  return new Promise((resolve) => {
-    const postData = JSON.stringify({
+// Google Apps Script Web App HTTPS Relay (Port 443 HTTPS - Free Gmail Dispatch on Cloud Hosts)
+async function sendEmailViaGoogleScript(webAppUrl, recipient, subject, body, attachmentJsonStr, fileName) {
+  try {
+    const payload = JSON.stringify({
       recipient: recipient,
       subject: subject,
       body: body,
@@ -77,58 +78,27 @@ function sendEmailViaGoogleScript(webAppUrl, recipient, subject, body, attachmen
       fileContent: attachmentJsonStr
     });
 
-    function makeRequest(targetUrl, isPost = true, redirectsLeft = 3) {
-      if (redirectsLeft <= 0) {
-        return resolve({ success: false, message: 'Google Script Relay: Too many redirects' });
-      }
+    const response = await fetch(webAppUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: payload,
+      redirect: 'follow'
+    });
 
-      let parsedUrl;
-      try {
-        parsedUrl = new URL(targetUrl);
-      } catch (e) {
-        return resolve({ success: false, message: `Invalid Web App URL: ${targetUrl}` });
-      }
+    const text = await response.text();
+    let result = null;
+    try {
+      result = JSON.parse(text);
+    } catch (e) {}
 
-      const options = {
-        hostname: parsedUrl.hostname,
-        port: 443,
-        path: parsedUrl.pathname + parsedUrl.search,
-        method: isPost ? 'POST' : 'GET',
-        headers: isPost ? {
-          'Content-Type': 'application/json',
-          'Content-Length': Buffer.byteLength(postData)
-        } : {},
-        timeout: 15000
-      };
-
-      const req = https.request(options, (res) => {
-        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-          // Google Apps Script redirects to script.googleusercontent.com which expects GET
-          return makeRequest(res.headers.location, false, redirectsLeft - 1);
-        }
-
-        let data = '';
-        res.on('data', (chunk) => { data += chunk; });
-        res.on('end', () => {
-          if (res.statusCode >= 200 && res.statusCode < 300) {
-            resolve({ success: true, message: `Email delivered to ${recipient} via Google Web App Relay` });
-          } else {
-            resolve({ success: false, message: `Google Web App returned status ${res.statusCode}: ${data.substring(0, 100)}` });
-          }
-        });
-      });
-
-      req.on('error', (e) => resolve({ success: false, message: e.message || 'Google Web App connection failed' }));
-      req.on('timeout', () => { req.destroy(); resolve({ success: false, message: 'Google Script Relay timed out' }); });
-
-      if (isPost) {
-        req.write(postData);
-      }
-      req.end();
+    if (response.ok && (!result || result.success !== false)) {
+      return { success: true, message: (result && result.message) || `Email delivered to ${recipient} via Google Web App Relay` };
+    } else {
+      return { success: false, message: (result && (result.error || result.message)) || `Google Web App status ${response.status}: ${text.substring(0, 100)}` };
     }
-
-    makeRequest(webAppUrl, true);
-  });
+  } catch (err) {
+    return { success: false, message: err.message || 'Google Web App connection failed' };
+  }
 }
 
 // Resend HTTPS Email API Helper (Port 443 HTTPS - Unblocked API Email Sending)
@@ -1010,24 +980,30 @@ async function sendEmailBackup(recipientOverride = null) {
   };
 }
 
-// Automatic daily backup job checking every 15 minutes
+// Automatic daily backup job: checks every 5 minutes and triggers after 6 PM US Time (18:00 US Eastern Time)
 setInterval(async () => {
   try {
     const dbData = loadDB();
     const settings = (dbData.settings && dbData.settings.email) ? dbData.settings.email : {};
     if (settings.autoBackupEnabled === false) return;
 
-    const todayStr = new Date().toISOString().split('T')[0];
-    if (lastEmailBackupDate !== todayStr) {
-      const res = await sendEmailBackup();
-      if (res && res.sentEmail) {
-        console.log(`[Auto Email Backup] Daily automated email sent successfully to ${res.recipient}`);
+    // Get current US Eastern Time hour & today date string
+    const nowUs = new Date();
+    const usHour = parseInt(nowUs.toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour12: false, hour: '2-digit' }), 10);
+    const usTodayStr = nowUs.toLocaleDateString('en-US', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' }).split('/').join('-');
+    const recipient = settings.recipientEmail || BACKUP_RECIPIENT_EMAIL;
+
+    // Trigger automatically after 6:00 PM US Eastern Time (18:00 US ET)
+    if (usHour >= 18) {
+      if (lastEmailBackupDate !== usTodayStr && (!settings.lastSentAt || !settings.lastSentAt.startsWith(usTodayStr))) {
+        console.log(`[Auto Email Backup] Executing scheduled daily backup after 6:00 PM US ET (${usHour}:00 US ET) to ${recipient}...`);
+        await sendEmailBackup(recipient);
       }
     }
   } catch (err) {
     console.error('[Auto Email Backup Error]', err.message);
   }
-}, 15 * 60 * 1000);
+}, 5 * 60 * 1000);
 
 // API: Get Email Backup Settings
 app.get('/api/admin/email-settings', (req, res) => {
@@ -1035,10 +1011,10 @@ app.get('/api/admin/email-settings', (req, res) => {
   const settings = (db.settings && db.settings.email) ? db.settings.email : {};
   const currentPass = settings.smtpPass || process.env.GMAIL_APP_PASSWORD || process.env.SMTP_PASS || '';
   res.json({
-    recipientEmail: settings.recipientEmail || 'sagaralapati3695@gmail.com',
+    recipientEmail: settings.recipientEmail || BACKUP_RECIPIENT_EMAIL,
     smtpHost: settings.smtpHost || 'smtp.gmail.com',
     smtpPort: settings.smtpPort || 587,
-    smtpUser: settings.smtpUser || 'sagaralapati3695@gmail.com',
+    smtpUser: settings.smtpUser || BACKUP_RECIPIENT_EMAIL,
     hasPassword: !!currentPass,
     webAppUrl: settings.webAppUrl || '',
     resendApiKey: settings.resendApiKey || '',
@@ -1093,7 +1069,16 @@ app.put('/api/admin/email-settings', (req, res) => {
 // On-demand Email Backup Endpoints
 app.post(['/api/backup/send-email', '/api/admin/send-email-backup'], async (req, res) => {
   try {
-    const recipient = req.body.email || null;
+    const db = loadDB();
+    if (!db.settings) db.settings = {};
+    if (!db.settings.email) db.settings.email = {};
+
+    const { email, webAppUrl } = req.body;
+    if (email && email.trim()) db.settings.email.recipientEmail = email.trim();
+    if (typeof webAppUrl === 'string' && webAppUrl.trim()) db.settings.email.webAppUrl = webAppUrl.trim();
+    saveDB(db);
+
+    const recipient = (email && email.trim()) || db.settings.email.recipientEmail || BACKUP_RECIPIENT_EMAIL;
     const result = await sendEmailBackup(recipient);
     if (!result.success) {
       return res.status(400).json(result);

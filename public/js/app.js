@@ -631,19 +631,24 @@ function handleDownloadBackup() {
 }
 
 async function handleSendEmailBackup() {
-  showToast('Connecting to email server for sagaralapati3695@gmail.com...', 'info');
+  const recipientInput = document.getElementById('settingRecipientEmail');
+  const webAppUrlInput = document.getElementById('settingWebAppUrl');
+
+  const recipientEmail = recipientInput ? recipientInput.value.trim() : 'sagaralapati3695@gmail.com';
+  const webAppUrl = webAppUrlInput ? webAppUrlInput.value.trim() : '';
+
+  showToast(`Connecting to email backup service for ${recipientEmail}...`, 'info');
   try {
     const res = await fetch(`${API_BASE}/backup/send-email`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: 'sagaralapati3695@gmail.com' })
+      body: JSON.stringify({ email: recipientEmail, webAppUrl: webAppUrl })
     });
     const data = await res.json();
     if (res.ok && data.success) {
       showToast(data.message, 'success');
     } else if (data.requiresConfig) {
-      showToast('⚠️ Gmail Password Required: Please enter your 16-letter App Password in Settings below to enable automatic email sending.', 'error');
-      openEmailSettingsModal();
+      showToast(data.error || 'Email backup dispatch notice', 'warning');
     } else {
       showToast(data.error || data.message || 'Failed to send email backup', 'error');
     }
