@@ -1274,7 +1274,7 @@ app.get('/api/attendance', (req, res) => {
     const isAdmin = (emp.id === 'DBS-540' || emp.id === 'DBS-327' || emp.roleType === 'Admin' || emp.role === 'System Administrator');
 
     if (isAdmin) {
-      let status = isWeekend ? 'Holiday / Off' : 'Present';
+      let status = att ? att.status : (isWeekend ? 'Holiday / Off' : 'Unmarked');
       const parts = monthPrefix.split('-').map(Number);
       const totalDaysInMonth = new Date(parts[0], parts[1], 0).getDate();
       let adminPresent = 0;
@@ -1550,10 +1550,6 @@ async function buildMonthlyExcelBuffer(monthQuery) {
 
       const record = monthRecords.find(r => r.employeeId === emp.id && r.date === dateIso);
       let status = record ? record.status : (isWeekend ? 'Holiday / Off' : 'Unmarked');
-
-      if (isAdmin) {
-        status = isWeekend ? 'Holiday / Off' : 'Present';
-      }
 
       let cellText = 'P';
       if (status === 'Present') cellText = 'P';
@@ -1944,10 +1940,6 @@ async function buildCustomRangeExcelBuffer(startDateStr, endDateStr, titleLabel 
 
       const record = rangeRecords.find(r => r.employeeId === emp.id && r.date === iso);
       let status = record ? record.status : (isWeekend ? 'Holiday / Off' : 'Unmarked');
-
-      if (isAdmin) {
-        status = isWeekend ? 'Holiday / Off' : 'Present';
-      }
 
       let cellText = 'P';
       if (status === 'Present') cellText = 'P';
