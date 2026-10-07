@@ -502,6 +502,27 @@ function loadDB(forceReload = false) {
     });
   }
 
+  // Ensure Nuthalapati Karthik Teja (DBS-2690) is active
+  let empKarthik = db.employees.find(e => e.id === 'DBS-2690' || e.name === 'Nuthalapati Karthik Teja');
+  if (empKarthik) {
+    empKarthik.id = 'DBS-2690';
+    empKarthik.name = 'Nuthalapati Karthik Teja';
+    empKarthik.isArchived = false;
+    empKarthik.status = 'Active';
+  } else {
+    db.employees.push({
+      id: 'DBS-2690',
+      name: 'Nuthalapati Karthik Teja',
+      phone: '',
+      department: 'AR Callers',
+      role: 'AR Caller',
+      roleType: 'Employee',
+      isArchived: false,
+      status: 'Active',
+      avatarColor: '#DC2626'
+    });
+  }
+
   sortNumerically(db.employees);
   saveDB(db);
   return db;
