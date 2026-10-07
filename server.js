@@ -524,8 +524,24 @@ function loadDB(forceReload = false) {
   }
 
   sortNumerically(db.employees);
+  createAutomatedPreDeployBackup(db);
   saveDB(db);
   return db;
+}
+
+// Automated Server Pre-Deploy & Boot Snapshot Function
+function createAutomatedPreDeployBackup(db) {
+  try {
+    if (!db || !Array.isArray(db.attendance)) return;
+    const timestampIso = new Date().toISOString().replace(/[:.]/g, '-');
+    const snapshotPath = path.join(BACKUP_DIR, `db_auto_snapshot_${timestampIso}.json`);
+    const jsonStr = JSON.stringify(db, null, 2);
+    fs.writeFileSync(snapshotPath, jsonStr, 'utf8');
+    fs.writeFileSync(MASTER_BACKUP_FILE, jsonStr, 'utf8');
+    console.log(`[Auto Backup] Server created boot/deploy snapshot: ${snapshotPath} (${db.attendance.length} attendance records)`);
+  } catch (err) {
+    console.error('[Auto Backup Error]', err.message);
+  }
 }
 
 function getEmployeesForMonth(db, monthPrefix) {
