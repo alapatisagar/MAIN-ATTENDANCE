@@ -508,29 +508,40 @@ function loadDB(forceReload = false) {
 }
 
 function getEmployeesForMonth(db, monthPrefix) {
-  const monthRecords = (db.attendance || []).filter(a => a.date && a.date.startsWith(monthPrefix));
-  if (monthRecords.length > 0) {
+  const currentMonthPrefix = new Date().toISOString().substring(0, 7);
+
+  if (monthPrefix < currentMonthPrefix) {
+    // PAST MONTH: Show callers who have historical attendance logs in this past month
+    const monthRecords = (db.attendance || []).filter(a => a.date && a.date.startsWith(monthPrefix));
     const empIdSet = new Set(monthRecords.map(a => a.employeeId));
     const emps = db.employees.filter(e => empIdSet.has(e.id));
     sortNumerically(emps);
     return emps;
+  } else {
+    // PRESENT OR FUTURE MONTH: Show all active (non-archived) callers
+    // - Newly added employees (even mid-month) immediately appear!
+    // - Deleted employees are immediately removed from present month onwards!
+    const emps = db.employees.filter(e => !e.isArchived);
+    sortNumerically(emps);
+    return emps;
   }
-  const emps = db.employees.filter(e => !e.isArchived);
-  sortNumerically(emps);
-  return emps;
 }
 
 function getEmployeesForDateRange(db, startDateStr, endDateStr) {
-  const rangeRecords = (db.attendance || []).filter(a => a.date && a.date >= startDateStr && a.date <= endDateStr);
-  if (rangeRecords.length > 0) {
+  const currentMonthPrefix = new Date().toISOString().substring(0, 7);
+  const startMonthPrefix = startDateStr.substring(0, 7);
+
+  if (startMonthPrefix < currentMonthPrefix) {
+    const rangeRecords = (db.attendance || []).filter(a => a.date && a.date >= startDateStr && a.date <= endDateStr);
     const empIdSet = new Set(rangeRecords.map(a => a.employeeId));
     const emps = db.employees.filter(e => empIdSet.has(e.id));
     sortNumerically(emps);
     return emps;
+  } else {
+    const emps = db.employees.filter(e => !e.isArchived);
+    sortNumerically(emps);
+    return emps;
   }
-  const emps = db.employees.filter(e => !e.isArchived);
-  sortNumerically(emps);
-  return emps;
 }
 
 // ---------------------------------------------------------
