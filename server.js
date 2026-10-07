@@ -636,6 +636,42 @@ app.get('/api/employees', (req, res) => {
   res.json(activeList);
 });
 
+function autoPopulatePreviousMonthDaysForNewEmployee(db, empId, empName) {
+  if (!db.attendance) db.attendance = [];
+
+  const now = new Date();
+  const year = now.getFullYear();
+  const monthIdx = now.getMonth();
+  const currentDay = now.getDate();
+  const monthStr = String(monthIdx + 1).padStart(2, '0');
+
+  for (let d = 1; d < currentDay; d++) {
+    const dayStr = String(d).padStart(2, '0');
+    const dateIso = `${year}-${monthStr}-${dayStr}`;
+
+    const dateObj = new Date(year, monthIdx, d);
+    const dayOfWeek = dateObj.getDay();
+    const isWeekend = (dayOfWeek === 0 || dayOfWeek === 6);
+
+    const status = isWeekend ? 'Holiday / Off' : 'Absent';
+
+    const existing = db.attendance.find(a => a.employeeId === empId && a.date === dateIso);
+    if (!existing) {
+      db.attendance.push({
+        id: `ATT-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
+        employeeId: empId,
+        employeeName: empName,
+        department: 'AR Callers',
+        date: dateIso,
+        status: status,
+        checkIn: null,
+        checkOut: null,
+        notes: isWeekend ? 'Weekend Off' : 'Auto-marked Absent prior to hire date'
+      });
+    }
+  }
+}
+
 // 3. Add New Employee (Always AR Callers)
 app.post('/api/employees', (req, res) => {
   const db = loadDB();
@@ -653,6 +689,7 @@ app.post('/api/employees', (req, res) => {
       // Re-activate archived employee
       existing.isArchived = false;
       existing.name = name.trim();
+      autoPopulatePreviousMonthDaysForNewEmployee(db, existing.id, existing.name);
       saveDB(db);
       return res.status(200).json(existing);
     }
@@ -673,6 +710,7 @@ app.post('/api/employees', (req, res) => {
 
   db.employees.push(newEmp);
   sortNumerically(db.employees);
+  autoPopulatePreviousMonthDaysForNewEmployee(db, newEmp.id, newEmp.name);
   saveDB(db);
 
   res.status(201).json(newEmp);
