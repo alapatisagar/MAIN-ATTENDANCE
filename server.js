@@ -264,7 +264,6 @@ const RAW_STAFF_LIST = [
   { id: 'DBS-2661', name: 'Pendyala Venkata Ramesh' },
   { id: 'DBS-2617', name: 'Karthik Dividevara' },
   { id: 'DBS-540', name: 'SAGAR ALAPATI', roleType: 'Admin', phone: '9704225352', pass: '9640000890' },
-  { id: 'DBS-25158', name: 'Atla Naga Venu' },
   { id: 'DBS-550', name: 'Prathyush Raj Bontha' },
   { id: 'DBS-25138', name: 'Surendra Gudvalli' },
   { id: 'DBS-566', name: 'Vijay Kumar Naligila' }
@@ -502,24 +501,25 @@ function loadDB(forceReload = false) {
     });
   }
 
-  // Ensure Nuthalapati Karthik Teja (DBS-2690) is active
-  let empKarthik = db.employees.find(e => e.id === 'DBS-2690' || e.name === 'Nuthalapati Karthik Teja');
-  if (empKarthik) {
-    empKarthik.id = 'DBS-2690';
-    empKarthik.name = 'Nuthalapati Karthik Teja';
-    empKarthik.isArchived = false;
-    empKarthik.status = 'Active';
-  } else {
-    db.employees.push({
-      id: 'DBS-2690',
-      name: 'Nuthalapati Karthik Teja',
-      phone: '',
-      department: 'AR Callers',
-      role: 'AR Caller',
-      roleType: 'Employee',
-      isArchived: false,
-      status: 'Active',
-      avatarColor: '#DC2626'
+  // Enforce ONLY the 54 specified active employees for present month
+  const ALLOWED_OCTOBER_IDS = new Set([
+    'DBS-230', 'DBS-306', 'DBS-327', 'DBS-352', 'DBS-424', 'DBS-429', 'DBS-433', 'DBS-449',
+    'DBS-466', 'DBS-511', 'DBS-512', 'DBS-513', 'DBS-514', 'DBS-515', 'DBS-540', 'DBS-548',
+    'DBS-549', 'DBS-550', 'DBS-554', 'DBS-560', 'DBS-566', 'DBS-568', 'DBS-2511', 'DBS-2512',
+    'DBS-2514', 'DBS-2519', 'DBS-2530', 'DBS-2554', 'DBS-2555', 'DBS-2604', 'DBS-2605', 'DBS-2606',
+    'DBS-2607', 'DBS-2613', 'DBS-2615', 'DBS-2616', 'DBS-2617', 'DBS-2639', 'DBS-2640', 'DBS-2648',
+    'DBS-2649', 'DBS-2661', 'DBS-2668', 'DBS-2669', 'DBS-2674', 'DBS-2684', 'DBS-2685', 'DBS-2686',
+    'DBS-2690', 'DBS-25114', 'DBS-25132', 'DBS-25133', 'DBS-25138', 'DBS-25159'
+  ]);
+
+  if (Array.isArray(db.employees)) {
+    db.employees.forEach(e => {
+      if (ALLOWED_OCTOBER_IDS.has(e.id)) {
+        e.isArchived = false;
+        e.status = 'Active';
+      } else {
+        e.isArchived = true;
+      }
     });
   }
 
