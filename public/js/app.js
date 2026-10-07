@@ -396,25 +396,26 @@ function renderAttendanceTable() {
             <div class="emp-avatar" style="background-color: ${emp.avatarColor || '#F59E0B'}">${initials}</div>
             <div class="emp-details">
               <span class="emp-name">${escapeHTML(emp.name)}</span>
-              <span class="emp-id">${escapeHTML(emp.employeeId)}</span>
+              <span class="emp-id">
+                ${escapeHTML(emp.employeeId)}
+                ${emp.employeeId === 'DBS-540' || emp.employeeId === 'DBS-327' ? `
+                  <span class="streak-badge" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.4); padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 700; margin-left: 6px; display: inline-flex; align-items: center; gap: 4px;">
+                    <i class="fa-solid fa-star text-yellow"></i> 100% Perfect
+                  </span>
+                ` : ''}
+              </span>
             </div>
           </div>
         </td>
         <td class="text-center">
-          ${emp.employeeId === 'DBS-540' || emp.employeeId === 'DBS-327' ? `
-            <span class="streak-badge" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.4); padding: 4px 10px; border-radius: 20px; font-size: 0.85rem; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">
-              <i class="fa-solid fa-star text-yellow"></i> 100% Perfect
+          <div style="display: flex; gap: 6px; justify-content: center; align-items: center; flex-wrap: wrap;">
+            <span style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); padding: 4px 8px; border-radius: 6px; font-size: 0.8rem; font-weight: 700;" title="Total Present days this month">
+              <i class="fa-solid fa-circle-check"></i> ${pCount} Present
             </span>
-          ` : `
-            <div style="display: flex; gap: 6px; justify-content: center; align-items: center; flex-wrap: wrap;">
-              <span style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); padding: 4px 8px; border-radius: 6px; font-size: 0.8rem; font-weight: 700;" title="Total Present days this month">
-                <i class="fa-solid fa-circle-check"></i> ${pCount} Present
-              </span>
-              <span style="background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); padding: 4px 8px; border-radius: 6px; font-size: 0.8rem; font-weight: 700;" title="Total Absent days this month">
-                <i class="fa-solid fa-circle-xmark"></i> ${aCount} Absent
-              </span>
-            </div>
-          `}
+            <span style="background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); padding: 4px 8px; border-radius: 6px; font-size: 0.8rem; font-weight: 700;" title="Total Absent days this month">
+              <i class="fa-solid fa-circle-xmark"></i> ${aCount} Absent
+            </span>
+          </div>
         </td>
         <td>
           <div class="status-btn-group">

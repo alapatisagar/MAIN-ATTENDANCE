@@ -1271,38 +1271,6 @@ app.get('/api/attendance', (req, res) => {
   const records = targetEmps.map(emp => {
     const att = (db.attendance || []).find(a => a.employeeId === emp.id && a.date === targetDate);
     const empMonthLogs = monthRecords.filter(a => a.employeeId === emp.id);
-    const isAdmin = (emp.id === 'DBS-540' || emp.id === 'DBS-327' || emp.roleType === 'Admin' || emp.role === 'System Administrator');
-
-    if (isAdmin) {
-      let status = att ? att.status : (isWeekend ? 'Holiday / Off' : 'Unmarked');
-      const parts = monthPrefix.split('-').map(Number);
-      const totalDaysInMonth = new Date(parts[0], parts[1], 0).getDate();
-      let adminPresent = 0;
-      let adminOff = 0;
-      for (let d = 1; d <= totalDaysInMonth; d++) {
-        const dObj = new Date(parts[0], parts[1] - 1, d);
-        const dayOfWeek = dObj.getDay();
-        if (dayOfWeek === 0 || dayOfWeek === 6) {
-          adminOff++;
-        } else {
-          adminPresent++;
-        }
-      }
-
-      return {
-        employeeId: emp.id,
-        name: emp.name,
-        department: 'AR Callers',
-        avatarColor: emp.avatarColor,
-        date: targetDate,
-        status,
-        monthlyPresent: adminPresent,
-        monthlyAbsent: 0,
-        monthlyHalfDay: 0,
-        monthlyOff: adminOff,
-        notes: att ? (att.notes || '') : ''
-      };
-    }
 
     let monthlyPresent = 0;
     let monthlyAbsent = 0;
@@ -1673,45 +1641,27 @@ async function buildMonthlyExcelBuffer(monthQuery) {
 
   // Populate Summary Table Data Rows
   targetEmps.forEach(emp => {
-    const isAdmin = (emp.id === 'DBS-540' || emp.id === 'DBS-327' || emp.roleType === 'Admin' || emp.role === 'System Administrator');
-    let totalWorkingDays = 0;
-    let presentCount = 0;
-    let absentCount = 0;
+    const empRecords = monthRecords.filter(a => a.employeeId === emp.id);
+
+    let fullPresent = 0;
+    let fullAbsent = 0;
+    let halfDays = 0;
+
+    empRecords.forEach(r => {
+      if (r.status === 'Present') fullPresent++;
+      else if (r.status === 'Absent') fullAbsent++;
+      else if (r.status === 'Half Day') halfDays++;
+    });
+
+    // Half days are calculated directly as 0.5 Present and 0.5 Absent
+    const presentCount = fullPresent + (halfDays * 0.5);
+    const absentCount = fullAbsent + (halfDays * 0.5);
+    const totalWorkingDays = presentCount + absentCount;
+
     let attPercentage = '0.0%';
-
-    if (isAdmin) {
-      let weekdays = 0;
-      for (let d = 1; d <= totalDaysInMonth; d++) {
-        const dObj = new Date(year, monthIdx, d);
-        const dayOfWeek = dObj.getDay();
-        if (dayOfWeek !== 0 && dayOfWeek !== 6) weekdays++;
-      }
-      totalWorkingDays = weekdays;
-      presentCount = weekdays;
-      absentCount = 0;
-      attPercentage = '100.0%';
-    } else {
-      const empRecords = monthRecords.filter(a => a.employeeId === emp.id);
-
-      let fullPresent = 0;
-      let fullAbsent = 0;
-      let halfDays = 0;
-
-      empRecords.forEach(r => {
-        if (r.status === 'Present') fullPresent++;
-        else if (r.status === 'Absent') fullAbsent++;
-        else if (r.status === 'Half Day') halfDays++;
-      });
-
-      // Half days are calculated directly as 0.5 Present and 0.5 Absent
-      presentCount = fullPresent + (halfDays * 0.5);
-      absentCount = fullAbsent + (halfDays * 0.5);
-      totalWorkingDays = presentCount + absentCount;
-
-      if (totalWorkingDays > 0) {
-        const score = (presentCount / totalWorkingDays) * 100;
-        attPercentage = `${score.toFixed(1)}%`;
-      }
+    if (totalWorkingDays > 0) {
+      const score = (presentCount / totalWorkingDays) * 100;
+      attPercentage = `${score.toFixed(1)}%`;
     }
 
     const sRow = worksheet.addRow([
@@ -1770,33 +1720,7 @@ app.get('/api/admin/monthly-summary', (req, res) => {
   const monthRecords = attendanceList.filter(a => a.date && a.date.startsWith(monthQuery));
   const targetEmps = getEmployeesForMonth(db, monthQuery);
 
-  const parts = monthQuery.split('-').map(Number);
-  const totalDaysInMonth = new Date(parts[0], parts[1], 0).getDate();
-
   const summary = targetEmps.map(emp => {
-    const isAdmin = (emp.id === 'DBS-540' || emp.id === 'DBS-327' || emp.roleType === 'Admin' || emp.role === 'System Administrator');
-
-    if (isAdmin) {
-      let holidayOff = 0;
-      let present = 0;
-      for (let d = 1; d <= totalDaysInMonth; d++) {
-        const dObj = new Date(parts[0], parts[1] - 1, d);
-        const dayOfWeek = dObj.getDay();
-        if (dayOfWeek === 0 || dayOfWeek === 6) holidayOff++;
-        else present++;
-      }
-      return {
-        id: emp.id,
-        name: emp.name,
-        present,
-        absent: 0,
-        halfDay: 0,
-        holidayOff,
-        total: totalDaysInMonth,
-        rate: '100.0%'
-      };
-    }
-
     const empRecords = monthRecords.filter(a => a.employeeId === emp.id);
     let present = 0, absent = 0, halfDay = 0, holidayOff = 0;
 
@@ -2021,41 +1945,22 @@ async function buildCustomRangeExcelBuffer(startDateStr, endDateStr, titleLabel 
   summaryHeaderRow.getCell(1).alignment = { vertical: 'middle', horizontal: 'left' };
 
   targetEmps.forEach(emp => {
-    const isAdmin = (emp.id === 'DBS-540' || emp.id === 'DBS-327' || emp.roleType === 'Admin' || emp.role === 'System Administrator');
-    let totalWorkingDays = 0;
-    let presentCount = 0;
-    let absentCount = 0;
+    const empRecords = rangeRecords.filter(a => a.employeeId === emp.id);
+    let fullPresent = 0, fullAbsent = 0, halfDays = 0;
+
+    empRecords.forEach(r => {
+      if (r.status === 'Present') fullPresent++;
+      else if (r.status === 'Absent') fullAbsent++;
+      else if (r.status === 'Half Day') halfDays++;
+    });
+
+    const presentCount = fullPresent + (halfDays * 0.5);
+    const absentCount = fullAbsent + (halfDays * 0.5);
+    const totalWorkingDays = presentCount + absentCount;
+
     let attPercentage = '0.0%';
-
-    if (isAdmin) {
-      let weekdays = 0;
-      dateList.forEach(iso => {
-        const p = iso.split('-').map(Number);
-        const dObj = new Date(Date.UTC(p[0], p[1] - 1, p[2]));
-        const dayOfWeek = dObj.getUTCDay();
-        if (dayOfWeek !== 0 && dayOfWeek !== 6) weekdays++;
-      });
-      totalWorkingDays = weekdays;
-      presentCount = weekdays;
-      absentCount = 0;
-      attPercentage = '100.0%';
-    } else {
-      const empRecords = rangeRecords.filter(a => a.employeeId === emp.id);
-      let fullPresent = 0, fullAbsent = 0, halfDays = 0;
-
-      empRecords.forEach(r => {
-        if (r.status === 'Present') fullPresent++;
-        else if (r.status === 'Absent') fullAbsent++;
-        else if (r.status === 'Half Day') halfDays++;
-      });
-
-      presentCount = fullPresent + (halfDays * 0.5);
-      absentCount = fullAbsent + (halfDays * 0.5);
-      totalWorkingDays = presentCount + absentCount;
-
-      if (totalWorkingDays > 0) {
-        attPercentage = `${((presentCount / totalWorkingDays) * 100).toFixed(1)}%`;
-      }
+    if (totalWorkingDays > 0) {
+      attPercentage = `${((presentCount / totalWorkingDays) * 100).toFixed(1)}%`;
     }
 
     const sRow = worksheet.addRow([
