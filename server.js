@@ -2144,3 +2144,5 @@ app.listen(PORT, () => {
   console.log(`👤 Co-Admin: VIJAYA SAI KRISHNA KEERTHI (7569258789 / Admin@123)`);
   console.log(`====================================================`);
 });
+
+module.exports = app;
