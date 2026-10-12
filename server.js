@@ -9,6 +9,7 @@ const compression = require('compression');
 const nodemailer = require('nodemailer');
 const dns = require('dns');
 const https = require('https');
+const os = require('os');
 
 // Force IPv4 first for DNS lookup on cloud platforms like Render to prevent ENETUNREACH IPv6 errors
 if (dns.setDefaultResultOrder) {
@@ -177,16 +178,23 @@ app.use((req, res, next) => {
   next();
 });
 
+// Explicit root route handler to guarantee index.html loads on all platforms
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
 const DATA_DIR = path.join(__dirname, 'data');
 const BACKUP_DIR = path.join(DATA_DIR, 'backups');
 const DB_FILE = path.join(DATA_DIR, 'db.json');
 
-if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-}
-if (!fs.existsSync(BACKUP_DIR)) {
-  fs.mkdirSync(BACKUP_DIR, { recursive: true });
-}
+try {
+  if (!fs.existsSync(DATA_DIR)) {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+  }
+  if (!fs.existsSync(BACKUP_DIR)) {
+    fs.mkdirSync(BACKUP_DIR, { recursive: true });
+  }
+} catch (e) {}
 
 // Active Sessions Store
 const activeSessions = new Map();
@@ -402,14 +410,19 @@ function saveDB(data) {
   const jsonStr = JSON.stringify(data, null, 2);
 
   // Write to primary database, master permanent archive, and daily snapshot
-  fs.writeFileSync(DB_FILE, jsonStr, 'utf8');
-  fs.writeFileSync(MASTER_BACKUP_FILE, jsonStr, 'utf8');
-
   try {
+    fs.writeFileSync(DB_FILE, jsonStr, 'utf8');
+    fs.writeFileSync(MASTER_BACKUP_FILE, jsonStr, 'utf8');
     const todayStr = new Date().toISOString().split('T')[0];
     const backupPath = path.join(BACKUP_DIR, `db_snapshot_${todayStr}.json`);
     fs.writeFileSync(backupPath, jsonStr, 'utf8');
-  } catch (e) {}
+  } catch (err) {
+    // Safe fallback for serverless read-only container filesystems (e.g. Vercel)
+    try {
+      const tmpPath = path.join(os.tmpdir(), 'db.json');
+      fs.writeFileSync(tmpPath, jsonStr, 'utf8');
+    } catch (e) {}
+  }
 }
 
 function loadDB(forceReload = false) {
@@ -418,7 +431,17 @@ function loadDB(forceReload = false) {
   }
   let db = null;
 
-  if (fs.existsSync(DB_FILE)) {
+  // 1. Try serverless tmp cache if available
+  try {
+    const tmpPath = path.join(os.tmpdir(), 'db.json');
+    if (fs.existsSync(tmpPath)) {
+      const content = fs.readFileSync(tmpPath, 'utf8');
+      db = JSON.parse(content);
+    }
+  } catch (e) {}
+
+  // 2. Load primary DB_FILE
+  if (!db && fs.existsSync(DB_FILE)) {
     try {
       const content = fs.readFileSync(DB_FILE, 'utf8');
       db = JSON.parse(content);
@@ -426,7 +449,7 @@ function loadDB(forceReload = false) {
       console.error('Warning: db.json read error, attempting backup restore...', err);
       db = restoreFromBackup();
     }
-  } else {
+  } else if (!db) {
     db = restoreFromBackup();
   }
 
@@ -2136,13 +2159,15 @@ setInterval(() => {
   } catch (err) {}
 }, 24 * 60 * 60 * 1000);
 
-app.listen(PORT, () => {
-  console.log(`====================================================`);
-  console.log(`🚀 AR Callers Attendance Portal running on port ${PORT}`);
-  console.log(`🛡️ Data Storage Policy: Permanent Preservation & Daily Snapshot Backups`);
-  console.log(`👤 Primary Admin: SAGAR ALAPATI (9704225352 / 9640000890)`);
-  console.log(`👤 Co-Admin: VIJAYA SAI KRISHNA KEERTHI (7569258789 / Admin@123)`);
-  console.log(`====================================================`);
-});
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`====================================================`);
+    console.log(`🚀 AR Callers Attendance Portal running on port ${PORT}`);
+    console.log(`🛡️ Data Storage Policy: Permanent Preservation & Daily Snapshot Backups`);
+    console.log(`👤 Primary Admin: SAGAR ALAPATI (9704225352 / 9640000890)`);
+    console.log(`👤 Co-Admin: VIJAYA SAI KRISHNA KEERTHI (7569258789 / Admin@123)`);
+    console.log(`====================================================`);
+  });
+}
 
 module.exports = app;
