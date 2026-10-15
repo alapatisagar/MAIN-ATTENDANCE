@@ -187,6 +187,14 @@ const DATA_DIR = path.join(__dirname, 'data');
 const BACKUP_DIR = path.join(DATA_DIR, 'backups');
 const DB_FILE = path.join(DATA_DIR, 'db.json');
 
+// Statically require db.json so Vercel's bundler (@vercel/nft) unconditionally bundles the database
+let bundledDB = null;
+try {
+  bundledDB = require('./data/db.json');
+} catch (e) {
+  bundledDB = null;
+}
+
 try {
   if (!fs.existsSync(DATA_DIR)) {
     fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -453,8 +461,13 @@ function loadDB(forceReload = false) {
     db = restoreFromBackup();
   }
 
-  if (!db || !db.employees || !Array.isArray(db.employees)) {
-    db = getInitialData();
+  // 3. Bundled database fallback (guarantees Vercel serverless has 100% of the data)
+  if (!db || !db.employees || !Array.isArray(db.employees) || db.employees.length === 0) {
+    if (bundledDB && Array.isArray(bundledDB.employees) && bundledDB.employees.length > 0) {
+      db = JSON.parse(JSON.stringify(bundledDB));
+    } else {
+      db = getInitialData();
+    }
   }
 
   // Merge all backups additively so no attendance log is ever lost
@@ -462,11 +475,15 @@ function loadDB(forceReload = false) {
 
   // Ensure attendance array exists and restore from backup if missing
   if (!db.attendance || !Array.isArray(db.attendance) || db.attendance.length === 0) {
-    const restored = restoreFromBackup();
-    if (restored && restored.attendance && restored.attendance.length > 0) {
-      db.attendance = restored.attendance;
+    if (bundledDB && Array.isArray(bundledDB.attendance) && bundledDB.attendance.length > 0) {
+      db.attendance = JSON.parse(JSON.stringify(bundledDB.attendance));
     } else {
-      db.attendance = db.attendance || [];
+      const restored = restoreFromBackup();
+      if (restored && restored.attendance && restored.attendance.length > 0) {
+        db.attendance = restored.attendance;
+      } else {
+        db.attendance = db.attendance || [];
+      }
     }
   }
 
@@ -524,36 +541,38 @@ function loadDB(forceReload = false) {
     });
   }
 
-  // Enforce ONLY the 54 specified active employees for present month
-  const ALLOWED_OCTOBER_IDS = new Set([
-    'DBS-230', 'DBS-306', 'DBS-327', 'DBS-352', 'DBS-424', 'DBS-429', 'DBS-433', 'DBS-449',
-    'DBS-466', 'DBS-511', 'DBS-512', 'DBS-513', 'DBS-514', 'DBS-515', 'DBS-540', 'DBS-548',
-    'DBS-549', 'DBS-550', 'DBS-554', 'DBS-560', 'DBS-566', 'DBS-568', 'DBS-2511', 'DBS-2512',
-    'DBS-2514', 'DBS-2519', 'DBS-2530', 'DBS-2554', 'DBS-2555', 'DBS-2604', 'DBS-2605', 'DBS-2606',
-    'DBS-2607', 'DBS-2613', 'DBS-2615', 'DBS-2616', 'DBS-2617', 'DBS-2639', 'DBS-2640', 'DBS-2648',
-    'DBS-2649', 'DBS-2661', 'DBS-2668', 'DBS-2669', 'DBS-2674', 'DBS-2684', 'DBS-2685', 'DBS-2686',
-    'DBS-2690', 'DBS-25114', 'DBS-25132', 'DBS-25133', 'DBS-25138', 'DBS-25159'
+  // Archive ONLY the 17 legacy inactive employees from previous months
+  // This keeps the 54 active callers for October, while ENSURING any NEW employees added by admins stay active!
+  const LEGACY_ARCHIVED_OCTOBER_IDS = new Set([
+    'DBS-496', 'DBS-25158', 'DBS-2368', 'DBS-6646', 'DBS-3478', 'DBS-6213', 'DBS-7230', 'DBS-4884',
+    'DBS-8143', 'DBS-8980', 'DBS-4515', 'DBS-1063', 'DBS-2132', 'DBS-7135', 'DBS-5470', 'DBS-25167',
+    'DBS-488'
   ]);
 
   if (Array.isArray(db.employees)) {
     db.employees.forEach(e => {
-      if (ALLOWED_OCTOBER_IDS.has(e.id)) {
+      if (LEGACY_ARCHIVED_OCTOBER_IDS.has(e.id)) {
+        e.isArchived = true;
+      } else if (e.isArchived === true) {
+        // Explicitly archived/deleted by admin
+        e.isArchived = true;
+      } else {
         e.isArchived = false;
         e.status = 'Active';
-      } else {
-        e.isArchived = true;
       }
     });
   }
 
   sortNumerically(db.employees);
-  createAutomatedPreDeployBackup(db);
-  saveDB(db);
+  cachedDB = db;
   return db;
 }
 
-// Automated Server Pre-Deploy & Boot Snapshot Function
+// Automated Server Pre-Deploy & Boot Snapshot Function (Runs once on boot)
+let bootBackupDone = false;
 function createAutomatedPreDeployBackup(db) {
+  if (bootBackupDone) return;
+  bootBackupDone = true;
   try {
     if (!db || !Array.isArray(db.attendance)) return;
     const timestampIso = new Date().toISOString().replace(/[:.]/g, '-');
@@ -563,7 +582,7 @@ function createAutomatedPreDeployBackup(db) {
     fs.writeFileSync(MASTER_BACKUP_FILE, jsonStr, 'utf8');
     console.log(`[Auto Backup] Server created boot/deploy snapshot: ${snapshotPath} (${db.attendance.length} attendance records)`);
   } catch (err) {
-    console.error('[Auto Backup Error]', err.message);
+    // Graceful on serverless environments where local filesystem may be read-only
   }
 }
 
@@ -2150,16 +2169,90 @@ app.post('/api/admin/backups/restore', (req, res) => {
   }
 });
 
-// Nightly Automatic Backup Scheduler (Runs every 24 hours)
-setInterval(() => {
+// Multi-platform sync endpoint for serverless persistence (e.g. Vercel)
+app.post('/api/sync/state', (req, res) => {
   try {
     const db = loadDB();
-    saveDB(db);
-    console.log(`[Nightly Scheduler] Automated daily backup snapshot & master archive synced.`);
-  } catch (err) {}
-}, 24 * 60 * 60 * 1000);
+    const { localEmployees, localAttendance } = req.body;
+    let changed = false;
 
+    if (Array.isArray(localEmployees)) {
+      localEmployees.forEach(newEmp => {
+        if (newEmp && newEmp.id && !db.employees.some(e => e.id === newEmp.id)) {
+          db.employees.push({
+            id: newEmp.id,
+            name: newEmp.name,
+            phone: newEmp.phone || '',
+            department: 'AR Callers',
+            role: 'AR Caller',
+            roleType: 'Employee',
+            isArchived: false,
+            passwordHash: hashPassword(newEmp.id),
+            avatarColor: newEmp.avatarColor || '#F59E0B'
+          });
+          changed = true;
+        }
+      });
+    }
+
+    if (Array.isArray(localAttendance)) {
+      localAttendance.forEach(att => {
+        if (att && att.employeeId && att.date && att.status) {
+          const idx = db.attendance.findIndex(a => a.employeeId === att.employeeId && a.date === att.date);
+          if (idx >= 0) {
+            if (att.updatedAt && (!db.attendance[idx].updatedAt || att.updatedAt > db.attendance[idx].updatedAt)) {
+              db.attendance[idx].status = att.status;
+              db.attendance[idx].updatedAt = att.updatedAt;
+              changed = true;
+            }
+          } else {
+            db.attendance.push({
+              id: att.id || `ATT-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+              employeeId: att.employeeId,
+              employeeName: att.employeeName || '',
+              department: 'AR Callers',
+              date: att.date,
+              status: att.status,
+              notes: att.notes || '',
+              updatedAt: att.updatedAt || new Date().toISOString()
+            });
+            changed = true;
+          }
+        }
+      });
+    }
+
+    if (changed) {
+      sortNumerically(db.employees);
+      saveDB(db);
+    }
+
+    res.json({
+      success: true,
+      employeesCount: db.employees.length,
+      attendanceCount: db.attendance.length
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Initialize server data & perform one-time boot snapshot
+try {
+  const initDb = loadDB();
+  createAutomatedPreDeployBackup(initDb);
+} catch (e) {}
+
+// Nightly Automatic Backup Scheduler (Runs every 24 hours on persistent servers)
 if (!process.env.VERCEL) {
+  setInterval(() => {
+    try {
+      const db = loadDB();
+      saveDB(db);
+      console.log(`[Nightly Scheduler] Automated daily backup snapshot & master archive synced.`);
+    } catch (err) {}
+  }, 24 * 60 * 60 * 1000);
+
   app.listen(PORT, () => {
     console.log(`====================================================`);
     console.log(`🚀 AR Callers Attendance Portal running on port ${PORT}`);

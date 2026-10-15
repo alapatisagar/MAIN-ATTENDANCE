@@ -305,6 +305,26 @@ function formatUSDate(dateStr) {
   return `${parts[1]}/${parts[2]}/${parts[0]}`; // MM/DD/YYYY format
 }
 
+// Serverless & Multi-Platform Local Persistence Sync Helper
+let syncDebounceTimer = null;
+function syncLocalStateToServer() {
+  clearTimeout(syncDebounceTimer);
+  syncDebounceTimer = setTimeout(async () => {
+    try {
+      const localEmployees = JSON.parse(localStorage.getItem('arcallers_local_employees') || '[]');
+      const localMarksObj = JSON.parse(localStorage.getItem('arcallers_local_attendance') || '{}');
+      const localAttendance = Object.values(localMarksObj);
+      if (localEmployees.length === 0 && localAttendance.length === 0) return;
+
+      await fetch(`${API_BASE}/sync/state`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ localEmployees, localAttendance })
+      });
+    } catch (e) {}
+  }, 1200);
+}
+
 async function fetchAttendanceForDate() {
   const date = state.selectedDate;
   const parts = date.split('-');
@@ -335,7 +355,49 @@ async function fetchAttendanceForDate() {
     }
 
     const data = await res.json();
-    state.records = data.records || [];
+    let records = data.records || [];
+
+    // Local resilience: merge locally added callers and offline/serverless marks
+    try {
+      const localEmployees = JSON.parse(localStorage.getItem('arcallers_local_employees') || '[]');
+      const localArchived = JSON.parse(localStorage.getItem('arcallers_local_archived') || '[]');
+      const localMarksObj = JSON.parse(localStorage.getItem('arcallers_local_attendance') || '{}');
+
+      // Filter out any locally deleted callers
+      records = records.filter(r => !localArchived.includes(r.employeeId));
+
+      // Append any locally added callers not yet present in server response
+      localEmployees.forEach(localEmp => {
+        if (!records.some(r => r.employeeId === localEmp.id) && !localArchived.includes(localEmp.id)) {
+          const mark = localMarksObj[`${date}_${localEmp.id}`];
+          records.push({
+            employeeId: localEmp.id,
+            name: localEmp.name,
+            department: 'AR Callers',
+            avatarColor: '#F59E0B',
+            date: date,
+            status: mark ? mark.status : (state.isWeekend ? 'Holiday / Off' : 'Unmarked'),
+            monthlyPresent: 0,
+            monthlyAbsent: 0,
+            monthlyHalfDay: 0,
+            monthlyOff: 0,
+            notes: mark ? (mark.notes || '') : ''
+          });
+        }
+      });
+
+      // Apply any cached marks
+      records.forEach(r => {
+        const mark = localMarksObj[`${date}_${r.employeeId}`];
+        if (mark && mark.status) {
+          r.status = mark.status;
+        }
+      });
+
+      syncLocalStateToServer();
+    } catch (e) {}
+
+    state.records = records;
     renderAttendanceTable();
     updateStatsSummary();
   } catch (err) {
@@ -519,6 +581,20 @@ async function handleMarkAttendance(employeeId, status) {
     updateStatsSummary();
   }
 
+  // Save to local cache for instant persistence across serverless container recycles
+  try {
+    const localMarksObj = JSON.parse(localStorage.getItem('arcallers_local_attendance') || '{}');
+    localMarksObj[`${date}_${employeeId}`] = {
+      employeeId,
+      employeeName: rec ? rec.name : '',
+      date,
+      status,
+      updatedAt: new Date().toISOString()
+    };
+    localStorage.setItem('arcallers_local_attendance', JSON.stringify(localMarksObj));
+    syncLocalStateToServer();
+  } catch (e) {}
+
   try {
     const res = await fetch(`${API_BASE}/attendance/mark`, {
       method: 'POST',
@@ -534,8 +610,7 @@ async function handleMarkAttendance(employeeId, status) {
 
     showToast(`Marked ${status} for ${rec ? rec.name : employeeId}`, 'success');
   } catch (err) {
-    showToast('Network error marking attendance', 'error');
-    fetchAttendanceForDate();
+    showToast('Network error marking attendance (saved locally)', 'warning');
   }
 }
 
@@ -584,6 +659,19 @@ async function handleAddEmployee(e) {
       return;
     }
 
+    // Persist locally so caller never disappears on Vercel container refresh
+    try {
+      let localList = JSON.parse(localStorage.getItem('arcallers_local_employees') || '[]');
+      if (!localList.some(e => e.id === data.id)) {
+        localList.push({ id: data.id, name: data.name });
+        localStorage.setItem('arcallers_local_employees', JSON.stringify(localList));
+      }
+      let archivedList = JSON.parse(localStorage.getItem('arcallers_local_archived') || '[]');
+      archivedList = archivedList.filter(id => id !== data.id);
+      localStorage.setItem('arcallers_local_archived', JSON.stringify(archivedList));
+      syncLocalStateToServer();
+    } catch (e) {}
+
     showToast(`Added ${data.name} (${data.id}) as AR Caller!`, 'success');
     closeModal('add-employee-modal');
     document.getElementById('addEmployeeForm').reset();
@@ -595,6 +683,17 @@ async function handleAddEmployee(e) {
 
 async function handleDeleteEmployee(empId, empName) {
   if (!confirm(`Delete employee ${empName} (${empId})? This action cannot be undone.`)) return;
+
+  // Remove from local added and mark in local archived
+  try {
+    let localList = JSON.parse(localStorage.getItem('arcallers_local_employees') || '[]');
+    localList = localList.filter(e => e.id !== empId);
+    localStorage.setItem('arcallers_local_employees', JSON.stringify(localList));
+
+    let archivedList = JSON.parse(localStorage.getItem('arcallers_local_archived') || '[]');
+    if (!archivedList.includes(empId)) archivedList.push(empId);
+    localStorage.setItem('arcallers_local_archived', JSON.stringify(archivedList));
+  } catch (e) {}
 
   try {
     const res = await fetch(`${API_BASE}/employees/${empId}`, {
