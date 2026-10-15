@@ -178,9 +178,27 @@ app.use((req, res, next) => {
   next();
 });
 
-// Explicit root route handler to guarantee index.html loads on all platforms
+// Explicit static asset handlers to guarantee 100% asset loading on all serverless platforms
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+app.get('/css/:file', (req, res) => {
+  const filePath = path.join(__dirname, 'public', 'css', req.params.file);
+  if (fs.existsSync(filePath)) {
+    res.setHeader('Content-Type', 'text/css; charset=utf-8');
+    return res.sendFile(filePath);
+  }
+  res.status(404).send('Not Found');
+});
+
+app.get('/js/:file', (req, res) => {
+  const filePath = path.join(__dirname, 'public', 'js', req.params.file);
+  if (fs.existsSync(filePath)) {
+    res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+    return res.sendFile(filePath);
+  }
+  res.status(404).send('Not Found');
 });
 
 const DATA_DIR = path.join(__dirname, 'data');
