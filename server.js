@@ -178,6 +178,28 @@ app.use((req, res, next) => {
   next();
 });
 
+// Cloud Database Auto-Sync & Client Firebase Header Middleware
+app.use(async (req, res, next) => {
+  const clientFirebaseUrl = req.headers['x-firebase-url'];
+  if (clientFirebaseUrl && typeof clientFirebaseUrl === 'string' && clientFirebaseUrl.trim()) {
+    const config = getCloudConfig();
+    if (!config.firebaseUrl) {
+      config.firebaseUrl = clientFirebaseUrl.trim();
+      saveCloudConfig(config);
+    }
+  }
+
+  if (req.path.startsWith('/api/') && !req.path.startsWith('/api/admin/cloud-settings')) {
+    try {
+      const cloudData = await pullFromCloud(clientFirebaseUrl);
+      if (cloudData) {
+        loadDB(true);
+      }
+    } catch (e) {}
+  }
+  next();
+});
+
 // Explicit static asset handlers to guarantee 100% asset loading on all serverless platforms
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
@@ -221,6 +243,152 @@ try {
     fs.mkdirSync(BACKUP_DIR, { recursive: true });
   }
 } catch (e) {}
+// =========================================================================
+// CLOUD DATABASE PERSISTENCE ENGINE (Firebase Realtime Database / Vercel KV)
+// =========================================================================
+const CLOUD_CONFIG_FILE = path.join(DATA_DIR, 'cloud_config.json');
+
+function normalizeFirebaseUrl(rawUrl) {
+  if (!rawUrl || !rawUrl.trim()) return '';
+  let url = rawUrl.trim();
+  const [base, query] = url.split('?');
+  let cleanBase = base;
+  if (!cleanBase.endsWith('.json')) {
+    if (!cleanBase.endsWith('/')) cleanBase += '/';
+    cleanBase += 'attendance_db.json';
+  }
+  return query ? `${cleanBase}?${query}` : cleanBase;
+}
+
+function getCloudConfig() {
+  let config = {
+    firebaseUrl: process.env.FIREBASE_DATABASE_URL || '',
+    kvUrl: process.env.KV_REST_API_URL || '',
+    kvToken: process.env.KV_REST_API_TOKEN || ''
+  };
+  try {
+    if (fs.existsSync(CLOUD_CONFIG_FILE)) {
+      const saved = JSON.parse(fs.readFileSync(CLOUD_CONFIG_FILE, 'utf8'));
+      if (saved.firebaseUrl) config.firebaseUrl = saved.firebaseUrl;
+      if (saved.kvUrl) config.kvUrl = saved.kvUrl;
+      if (saved.kvToken) config.kvToken = saved.kvToken;
+    }
+  } catch (e) {
+    try {
+      const tmpPath = path.join(os.tmpdir(), 'cloud_config.json');
+      if (fs.existsSync(tmpPath)) {
+        const saved = JSON.parse(fs.readFileSync(tmpPath, 'utf8'));
+        if (saved.firebaseUrl) config.firebaseUrl = saved.firebaseUrl;
+        if (saved.kvUrl) config.kvUrl = saved.kvUrl;
+        if (saved.kvToken) config.kvToken = saved.kvToken;
+      }
+    } catch (err) {}
+  }
+  return config;
+}
+
+function saveCloudConfig(config) {
+  try {
+    fs.writeFileSync(CLOUD_CONFIG_FILE, JSON.stringify(config, null, 2), 'utf8');
+  } catch (e) {
+    try {
+      const tmpPath = path.join(os.tmpdir(), 'cloud_config.json');
+      fs.writeFileSync(tmpPath, JSON.stringify(config, null, 2), 'utf8');
+    } catch (err) {}
+  }
+}
+
+async function syncToCloud(db) {
+  if (!db) return;
+  const config = getCloudConfig();
+
+  // 1. Firebase Realtime Database Sync
+  if (config.firebaseUrl) {
+    try {
+      const url = normalizeFirebaseUrl(config.firebaseUrl);
+      const res = await fetch(url, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(db)
+      });
+      if (res.ok) {
+        console.log(`[Cloud Sync] Pushed ${db.attendance ? db.attendance.length : 0} logs to Firebase Realtime Database`);
+      }
+    } catch (e) {
+      console.error('[Cloud Sync Error - Firebase]', e.message);
+    }
+  }
+
+  // 2. Vercel KV / Upstash Redis Sync
+  if (config.kvUrl && config.kvToken) {
+    try {
+      await fetch(`${config.kvUrl}/set/ar_callers_db`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${config.kvToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(db)
+      });
+      console.log(`[Cloud Sync] Pushed ${db.attendance ? db.attendance.length : 0} logs to Vercel KV`);
+    } catch (e) {
+      console.error('[Cloud Sync Error - Vercel KV]', e.message);
+    }
+  }
+}
+
+let lastCloudPullTime = 0;
+let cachedCloudData = null;
+async function pullFromCloud(customFirebaseUrl = null) {
+  const now = Date.now();
+  if (now - lastCloudPullTime < 8000 && cachedCloudData) return cachedCloudData;
+  lastCloudPullTime = now;
+
+  const config = getCloudConfig();
+  if (customFirebaseUrl && typeof customFirebaseUrl === 'string' && customFirebaseUrl.trim()) {
+    config.firebaseUrl = customFirebaseUrl.trim();
+  }
+
+  // 1. Firebase Realtime Database
+  if (config.firebaseUrl) {
+    try {
+      const url = normalizeFirebaseUrl(config.firebaseUrl);
+      const res = await fetch(url);
+      if (res.ok) {
+        const cloudDb = await res.json();
+        if (cloudDb && Array.isArray(cloudDb.employees) && Array.isArray(cloudDb.attendance) && cloudDb.attendance.length > 0) {
+          cachedCloudData = cloudDb;
+          console.log(`[Cloud Pull] Loaded ${cloudDb.attendance.length} attendance records from Firebase Realtime Database`);
+          return cloudDb;
+        }
+      }
+    } catch (e) {
+      console.error('[Cloud Pull Error - Firebase]', e.message);
+    }
+  }
+
+  // 2. Vercel KV / Upstash Redis
+  if (config.kvUrl && config.kvToken) {
+    try {
+      const res = await fetch(`${config.kvUrl}/get/ar_callers_db`, {
+        headers: { 'Authorization': `Bearer ${config.kvToken}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const cloudDb = typeof data.result === 'string' ? JSON.parse(data.result) : data.result;
+        if (cloudDb && Array.isArray(cloudDb.employees) && Array.isArray(cloudDb.attendance) && cloudDb.attendance.length > 0) {
+          cachedCloudData = cloudDb;
+          console.log(`[Cloud Pull] Loaded ${cloudDb.attendance.length} records from Vercel KV`);
+          return cloudDb;
+        }
+      }
+    } catch (e) {
+      console.error('[Cloud Pull Error - Vercel KV]', e.message);
+    }
+  }
+
+  return null;
+}
 
 // Active Sessions Store
 const activeSessions = new Map();
@@ -449,6 +617,9 @@ function saveDB(data) {
       fs.writeFileSync(tmpPath, jsonStr, 'utf8');
     } catch (e) {}
   }
+
+  // Asynchronously synchronize with Cloud Database (Firebase Realtime Database / Vercel KV)
+  syncToCloud(data).catch(() => {});
 }
 
 function loadDB(forceReload = false) {
@@ -465,6 +636,11 @@ function loadDB(forceReload = false) {
       db = JSON.parse(content);
     }
   } catch (e) {}
+
+  // 1.5 Try cached cloud database if available
+  if (!db && cachedCloudData) {
+    db = JSON.parse(JSON.stringify(cachedCloudData));
+  }
 
   // 2. Load primary DB_FILE
   if (!db && fs.existsSync(DB_FILE)) {
@@ -485,6 +661,33 @@ function loadDB(forceReload = false) {
       db = JSON.parse(JSON.stringify(bundledDB));
     } else {
       db = getInitialData();
+    }
+  }
+
+  // 3.5 Merge cached cloud data so latest cloud records and employees are always present
+  if (cachedCloudData && Array.isArray(cachedCloudData.attendance)) {
+    const existingMap = new Map();
+    (db.attendance || []).forEach(a => {
+      if (a && a.employeeId && a.date) existingMap.set(`${a.date}_${a.employeeId}`, a);
+    });
+    cachedCloudData.attendance.forEach(ca => {
+      if (ca && ca.employeeId && ca.date) {
+        const key = `${ca.date}_${ca.employeeId}`;
+        const current = existingMap.get(key);
+        if (!current || (ca.updatedAt && ca.updatedAt > (current.updatedAt || 0))) {
+          existingMap.set(key, ca);
+        }
+      }
+    });
+    db.attendance = Array.from(existingMap.values());
+
+    if (Array.isArray(cachedCloudData.employees)) {
+      cachedCloudData.employees.forEach(ce => {
+        if (!db.employees.some(e => e.id === ce.id)) {
+          db.employees.push(ce);
+        }
+      });
+      sortNumerically(db.employees);
     }
   }
 
@@ -2218,9 +2421,9 @@ app.post('/api/sync/state', (req, res) => {
         if (att && att.employeeId && att.date && att.status) {
           const idx = db.attendance.findIndex(a => a.employeeId === att.employeeId && a.date === att.date);
           if (idx >= 0) {
-            if (att.updatedAt && (!db.attendance[idx].updatedAt || att.updatedAt > db.attendance[idx].updatedAt)) {
+            if (db.attendance[idx].status !== att.status || (att.updatedAt && att.updatedAt > (db.attendance[idx].updatedAt || 0))) {
               db.attendance[idx].status = att.status;
-              db.attendance[idx].updatedAt = att.updatedAt;
+              db.attendance[idx].updatedAt = att.updatedAt || new Date().toISOString();
               changed = true;
             }
           } else {
@@ -2252,6 +2455,55 @@ app.post('/api/sync/state', (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// Cloud Database Configuration API
+app.get('/api/admin/cloud-settings', (req, res) => {
+  const config = getCloudConfig();
+  res.json({
+    hasFirebase: Boolean(config.firebaseUrl),
+    firebaseUrl: config.firebaseUrl ? config.firebaseUrl.replace(/key=[^&]+/, 'key=***') : '',
+    hasVercelKv: Boolean(config.kvUrl && config.kvToken),
+    activeProvider: config.firebaseUrl ? 'Firebase Realtime Database' : (config.kvUrl ? 'Vercel KV' : 'Local Storage'),
+    lastSyncedAt: cachedCloudData ? new Date(lastCloudPullTime).toISOString() : null
+  });
+});
+
+app.put('/api/admin/cloud-settings', async (req, res) => {
+  try {
+    const { firebaseUrl, kvUrl, kvToken } = req.body;
+    const config = getCloudConfig();
+    if (typeof firebaseUrl !== 'undefined') config.firebaseUrl = (firebaseUrl || '').trim();
+    if (typeof kvUrl !== 'undefined') config.kvUrl = (kvUrl || '').trim();
+    if (typeof kvToken !== 'undefined') config.kvToken = (kvToken || '').trim();
+
+    saveCloudConfig(config);
+
+    // Immediately sync current database to the new cloud provider
+    const db = loadDB();
+    await syncToCloud(db);
+
+    res.json({
+      success: true,
+      message: 'Cloud database settings updated and synchronized successfully!',
+      activeProvider: config.firebaseUrl ? 'Firebase Realtime Database' : (config.kvUrl ? 'Vercel KV' : 'Local Storage')
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to save cloud settings: ' + err.message });
+  }
+});
+
+app.post('/api/admin/cloud-sync-now', async (req, res) => {
+  try {
+    const db = loadDB();
+    await syncToCloud(db);
+    res.json({
+      success: true,
+      message: `Successfully synchronized ${db.attendance ? db.attendance.length : 0} attendance records and ${db.employees ? db.employees.length : 0} callers to cloud storage!`
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Cloud sync failed: ' + err.message });
   }
 });
 

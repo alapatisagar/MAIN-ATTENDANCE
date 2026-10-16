@@ -191049,6 +191049,16 @@
       "status": "Present",
       "notes": "",
       "updatedAt": "2026-10-12T22:04:09.617Z"
+    },
+    {
+      "id": "ATT-1792179063267-663",
+      "employeeId": "DBS-548",
+      "employeeName": "Praneeth Raj Bontha",
+      "department": "AR Callers",
+      "date": "2026-10-17",
+      "status": "Present",
+      "notes": "",
+      "updatedAt": "2026-10-16T19:31:03.267Z"
     }
   ]
 }

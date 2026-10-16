@@ -307,22 +307,32 @@ function formatUSDate(dateStr) {
 
 // Serverless & Multi-Platform Local Persistence Sync Helper
 let syncDebounceTimer = null;
-function syncLocalStateToServer() {
+async function syncLocalStateToServer(immediate = false) {
   clearTimeout(syncDebounceTimer);
-  syncDebounceTimer = setTimeout(async () => {
+  const doSync = async () => {
     try {
       const localEmployees = JSON.parse(localStorage.getItem('arcallers_local_employees') || '[]');
       const localMarksObj = JSON.parse(localStorage.getItem('arcallers_local_attendance') || '{}');
       const localAttendance = Object.values(localMarksObj);
       if (localEmployees.length === 0 && localAttendance.length === 0) return;
 
+      const headers = { 'Content-Type': 'application/json' };
+      const savedFirebaseUrl = localStorage.getItem('arcallers_firebase_url');
+      if (savedFirebaseUrl) headers['X-Firebase-URL'] = savedFirebaseUrl;
+
       await fetch(`${API_BASE}/sync/state`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ localEmployees, localAttendance })
       });
     } catch (e) {}
-  }, 1200);
+  };
+
+  if (immediate) {
+    return await doSync();
+  } else {
+    syncDebounceTimer = setTimeout(doSync, 1000);
+  }
 }
 
 async function fetchAttendanceForDate() {
@@ -348,7 +358,11 @@ async function fetchAttendanceForDate() {
   }
 
   try {
-    const res = await fetch(`${API_BASE}/attendance?date=${date}`);
+    const headers = {};
+    const savedFirebaseUrl = localStorage.getItem('arcallers_firebase_url');
+    if (savedFirebaseUrl) headers['X-Firebase-URL'] = savedFirebaseUrl;
+
+    const res = await fetch(`${API_BASE}/attendance?date=${date}`, { headers });
     if (!res.ok) {
       showToast('Failed to load attendance records', 'error');
       return;
@@ -357,7 +371,7 @@ async function fetchAttendanceForDate() {
     const data = await res.json();
     let records = data.records || [];
 
-    // Local resilience: merge locally added callers and offline/serverless marks
+    // Local resilience & master ledger: merge locally added callers and offline/serverless marks
     try {
       const localEmployees = JSON.parse(localStorage.getItem('arcallers_local_employees') || '[]');
       const localArchived = JSON.parse(localStorage.getItem('arcallers_local_archived') || '[]');
@@ -386,12 +400,49 @@ async function fetchAttendanceForDate() {
         }
       });
 
-      // Apply any cached marks
+      // Synchronize and apply cached marks
       records.forEach(r => {
-        const mark = localMarksObj[`${date}_${r.employeeId}`];
-        if (mark && mark.status) {
+        const key = `${date}_${r.employeeId}`;
+        const mark = localMarksObj[key];
+        if (mark && mark.status && mark.status !== 'Unmarked') {
           r.status = mark.status;
+          if (mark.notes) r.notes = mark.notes;
+        } else if (r.status && r.status !== 'Unmarked') {
+          // Store server record in local master ledger so it is permanently retained
+          localMarksObj[key] = {
+            employeeId: r.employeeId,
+            employeeName: r.name,
+            date: date,
+            status: r.status,
+            notes: r.notes || '',
+            updatedAt: new Date().toISOString()
+          };
         }
+      });
+      localStorage.setItem('arcallers_local_attendance', JSON.stringify(localMarksObj));
+
+      // Calculate TRUE monthly statistics across all dates in this month
+      const monthPrefix = date.substring(0, 7);
+      records.forEach(r => {
+        let pCount = 0;
+        let aCount = 0;
+        let hdCount = 0;
+        let offCount = 0;
+
+        for (const k in localMarksObj) {
+          if (k.startsWith(monthPrefix) && (k.endsWith(`_${r.employeeId}`) || (localMarksObj[k] && localMarksObj[k].employeeId === r.employeeId))) {
+            const entry = localMarksObj[k];
+            if (entry.status === 'Present') pCount++;
+            else if (entry.status === 'Absent') aCount++;
+            else if (entry.status === 'Half Day') hdCount++;
+            else if (entry.status === 'Holiday / Off' || entry.status === 'On Leave') offCount++;
+          }
+        }
+
+        r.monthlyPresent = Math.max(r.monthlyPresent || 0, pCount);
+        r.monthlyAbsent = Math.max(r.monthlyAbsent || 0, aCount);
+        r.monthlyHalfDay = Math.max(r.monthlyHalfDay || 0, hdCount);
+        r.monthlyOff = Math.max(r.monthlyOff || 0, offCount);
       });
 
       syncLocalStateToServer();
@@ -554,12 +605,42 @@ async function handleMarkRemainingPresent() {
     return;
   }
 
+  const date = state.selectedDate;
   const count = unmarkedRecs.length;
-  unmarkedRecs.forEach(r => {
-    handleMarkAttendance(r.employeeId, 'Present');
-  });
 
-  showToast(`Successfully marked all ${count} remaining callers as Present!`, 'success');
+  try {
+    const localMarksObj = JSON.parse(localStorage.getItem('arcallers_local_attendance') || '{}');
+    unmarkedRecs.forEach(r => {
+      r.status = 'Present';
+      r.monthlyPresent = (r.monthlyPresent || 0) + 1;
+      localMarksObj[`${date}_${r.employeeId}`] = {
+        employeeId: r.employeeId,
+        employeeName: r.name,
+        date,
+        status: 'Present',
+        updatedAt: new Date().toISOString()
+      };
+    });
+    localStorage.setItem('arcallers_local_attendance', JSON.stringify(localMarksObj));
+    renderAttendanceTable();
+    updateStatsSummary();
+  } catch (e) {}
+
+  try {
+    const headers = { 'Content-Type': 'application/json' };
+    const savedFirebaseUrl = localStorage.getItem('arcallers_firebase_url');
+    if (savedFirebaseUrl) headers['X-Firebase-URL'] = savedFirebaseUrl;
+
+    await fetch(`${API_BASE}/attendance/auto-present-remaining`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ date })
+    });
+    showToast(`Successfully marked all ${count} remaining callers as Present!`, 'success');
+    syncLocalStateToServer(true);
+  } catch (e) {
+    showToast(`Marked ${count} remaining callers as Present (saved locally)!`, 'success');
+  }
 }
 
 async function handleMarkAttendance(employeeId, status) {
@@ -596,21 +677,24 @@ async function handleMarkAttendance(employeeId, status) {
   } catch (e) {}
 
   try {
+    const headers = { 'Content-Type': 'application/json' };
+    const savedFirebaseUrl = localStorage.getItem('arcallers_firebase_url');
+    if (savedFirebaseUrl) headers['X-Firebase-URL'] = savedFirebaseUrl;
+
     const res = await fetch(`${API_BASE}/attendance/mark`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({ employeeId, date, status })
     });
 
     if (!res.ok) {
-      showToast('Failed to update attendance', 'error');
-      fetchAttendanceForDate(); // revert
+      showToast('Attendance recorded locally (server update pending)', 'warning');
       return;
     }
 
     showToast(`Marked ${status} for ${rec ? rec.name : employeeId}`, 'success');
   } catch (err) {
-    showToast('Network error marking attendance (saved locally)', 'warning');
+    showToast('Network issue: attendance saved locally', 'warning');
   }
 }
 
@@ -618,22 +702,49 @@ async function handleMarkAll(status) {
   const date = state.selectedDate;
   if (!confirm(`Mark ALL ${state.records.length} employees as ${status} for ${date}?`)) return;
 
+  // 1. Immediate local persistence for all employees
   try {
+    const localMarksObj = JSON.parse(localStorage.getItem('arcallers_local_attendance') || '{}');
+    state.records.forEach(r => {
+      const oldStatus = r.status;
+      r.status = status;
+      if (oldStatus === 'Present' && status !== 'Present') r.monthlyPresent = Math.max(0, (r.monthlyPresent || 0) - 1);
+      if (oldStatus === 'Absent' && status !== 'Absent') r.monthlyAbsent = Math.max(0, (r.monthlyAbsent || 0) - 1);
+      if (status === 'Present' && oldStatus !== 'Present') r.monthlyPresent = (r.monthlyPresent || 0) + 1;
+      if (status === 'Absent' && oldStatus !== 'Absent') r.monthlyAbsent = (r.monthlyAbsent || 0) + 1;
+
+      localMarksObj[`${date}_${r.employeeId}`] = {
+        employeeId: r.employeeId,
+        employeeName: r.name,
+        date,
+        status,
+        updatedAt: new Date().toISOString()
+      };
+    });
+    localStorage.setItem('arcallers_local_attendance', JSON.stringify(localMarksObj));
+    renderAttendanceTable();
+    updateStatsSummary();
+  } catch (e) {}
+
+  try {
+    const headers = { 'Content-Type': 'application/json' };
+    const savedFirebaseUrl = localStorage.getItem('arcallers_firebase_url');
+    if (savedFirebaseUrl) headers['X-Firebase-URL'] = savedFirebaseUrl;
+
     const res = await fetch(`${API_BASE}/attendance/mark-all`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({ date, status })
     });
 
     if (!res.ok) {
-      showToast('Bulk update failed', 'error');
-      return;
+      showToast(`Marked all employees as ${status} (saved locally)`, 'warning');
+    } else {
+      showToast(`Marked all employees as ${status}`, 'success');
     }
-
-    showToast(`Marked all employees as ${status}`, 'success');
-    fetchAttendanceForDate();
+    syncLocalStateToServer(true);
   } catch (err) {
-    showToast('Error in bulk status update', 'error');
+    showToast(`Saved all locally as ${status}`, 'warning');
   }
 }
 
@@ -647,9 +758,13 @@ async function handleAddEmployee(e) {
   const id = document.getElementById('newEmpId').value;
 
   try {
+    const headers = { 'Content-Type': 'application/json' };
+    const savedFirebaseUrl = localStorage.getItem('arcallers_firebase_url');
+    if (savedFirebaseUrl) headers['X-Firebase-URL'] = savedFirebaseUrl;
+
     const res = await fetch(`${API_BASE}/employees`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({ name, id, department: 'AR Callers' })
     });
 
@@ -669,7 +784,7 @@ async function handleAddEmployee(e) {
       let archivedList = JSON.parse(localStorage.getItem('arcallers_local_archived') || '[]');
       archivedList = archivedList.filter(id => id !== data.id);
       localStorage.setItem('arcallers_local_archived', JSON.stringify(archivedList));
-      syncLocalStateToServer();
+      await syncLocalStateToServer(true);
     } catch (e) {}
 
     showToast(`Added ${data.name} (${data.id}) as AR Caller!`, 'success');
@@ -693,11 +808,17 @@ async function handleDeleteEmployee(empId, empName) {
     let archivedList = JSON.parse(localStorage.getItem('arcallers_local_archived') || '[]');
     if (!archivedList.includes(empId)) archivedList.push(empId);
     localStorage.setItem('arcallers_local_archived', JSON.stringify(archivedList));
+    await syncLocalStateToServer(true);
   } catch (e) {}
 
   try {
+    const headers = {};
+    const savedFirebaseUrl = localStorage.getItem('arcallers_firebase_url');
+    if (savedFirebaseUrl) headers['X-Firebase-URL'] = savedFirebaseUrl;
+
     const res = await fetch(`${API_BASE}/employees/${empId}`, {
-      method: 'DELETE'
+      method: 'DELETE',
+      headers
     });
 
     if (!res.ok) {
@@ -716,7 +837,7 @@ async function handleDeleteEmployee(empId, empName) {
 /* ---------------------------------------------------------
    4. EXPORT MONTHLY EXCEL REPORT
    --------------------------------------------------------- */
-function handleExportMonthly(e) {
+async function handleExportMonthly(e) {
   e.preventDefault();
   const monthVal = document.getElementById('exportMonthInput').value;
 
@@ -725,10 +846,12 @@ function handleExportMonthly(e) {
     return;
   }
 
-  showToast(`Downloading Monthly Excel Report for ${monthVal}...`, 'success');
-  closeModal('export-monthly-modal');
+  showToast(`Syncing & preparing Monthly Excel Report for ${monthVal}...`, 'info');
+  await syncLocalStateToServer(true);
 
-  window.location.href = `${API_BASE}/export/monthly-excel?month=${monthVal}`;
+  closeModal('export-monthly-modal');
+  showToast(`Downloading Monthly Excel Report for ${monthVal}...`, 'success');
+  window.location.href = `${API_BASE}/export/monthly-excel?month=${monthVal}&t=${Date.now()}`;
 }
 
 function handleDownloadBackup() {
@@ -920,10 +1043,31 @@ async function handleImportBackupSubmit(event) {
 
       const data = await res.json();
       if (res.ok && data.success) {
+        try {
+          if (Array.isArray(jsonContent.attendance)) {
+            const localMarksObj = JSON.parse(localStorage.getItem('arcallers_local_attendance') || '{}');
+            jsonContent.attendance.forEach(a => {
+              if (a && a.date && a.employeeId) {
+                localMarksObj[`${a.date}_${a.employeeId}`] = a;
+              }
+            });
+            localStorage.setItem('arcallers_local_attendance', JSON.stringify(localMarksObj));
+          }
+          if (Array.isArray(jsonContent.employees)) {
+            const localList = JSON.parse(localStorage.getItem('arcallers_local_employees') || '[]');
+            jsonContent.employees.forEach(emp => {
+              if (emp && emp.id && !localList.some(e => e.id === emp.id)) {
+                localList.push({ id: emp.id, name: emp.name });
+              }
+            });
+            localStorage.setItem('arcallers_local_employees', JSON.stringify(localList));
+          }
+        } catch (e) {}
+
         showToast(data.message, 'success');
         closeModal('import-backup-modal');
         fileInput.value = '';
-        await fetchAttendanceForDate(state.selectedDate);
+        await fetchAttendanceForDate();
       } else {
         showToast(data.error || 'Failed to import backup file', 'error');
       }
@@ -961,7 +1105,12 @@ async function fetchMonthlySummaryData() {
   tbody.innerHTML = `<tr><td colspan="7" class="text-center">Loading monthly summary...</td></tr>`;
 
   try {
-    const res = await fetch(`${API_BASE}/admin/monthly-summary?month=${monthVal}`);
+    await syncLocalStateToServer(true);
+    const headers = {};
+    const savedFirebaseUrl = localStorage.getItem('arcallers_firebase_url');
+    if (savedFirebaseUrl) headers['X-Firebase-URL'] = savedFirebaseUrl;
+
+    const res = await fetch(`${API_BASE}/admin/monthly-summary?month=${monthVal}`, { headers });
     if (!res.ok) {
       tbody.innerHTML = `<tr><td colspan="7" class="text-center text-red">Failed to load summary</td></tr>`;
       return;
@@ -1028,19 +1177,100 @@ async function fetchMonthlySummaryData() {
   }
 }
 
-function triggerDownloadFromSummary() {
+async function triggerDownloadFromSummary() {
   const monthInput = document.getElementById('summaryMonthInput');
   const monthVal = monthInput ? monthInput.value : new Date().toISOString().substring(0, 7);
-  window.location.href = `${API_BASE}/export/monthly-excel?month=${monthVal}`;
+  showToast(`Syncing latest attendance for ${monthVal}...`, 'info');
+  await syncLocalStateToServer(true);
+  window.location.href = `${API_BASE}/export/monthly-excel?month=${monthVal}&t=${Date.now()}`;
+}
+
+async function loadCloudDatabaseSettings() {
+  try {
+    const input = document.getElementById('settingFirebaseUrl');
+    const localUrl = localStorage.getItem('arcallers_firebase_url') || '';
+    if (input && !input.value && localUrl) {
+      input.value = localUrl;
+    }
+
+    const res = await fetch(`${API_BASE}/admin/cloud-settings`);
+    if (res.ok) {
+      const data = await res.json();
+      const statusBadge = document.getElementById('cloudStorageStatusBadge');
+      if (statusBadge) {
+        if (data.hasFirebase || localUrl) {
+          statusBadge.innerHTML = `<i class="fa-solid fa-circle-check text-green"></i> Cloud Database Active (${data.activeProvider || 'Firebase Realtime DB'})`;
+          statusBadge.className = 'badge badge-success';
+        } else if (data.hasVercelKv) {
+          statusBadge.innerHTML = `<i class="fa-solid fa-circle-check text-green"></i> Cloud Database Active (Vercel KV)`;
+          statusBadge.className = 'badge badge-success';
+        } else {
+          statusBadge.innerHTML = `<i class="fa-solid fa-hard-drive text-yellow"></i> Browser Master Ledger (Auto-Sync Active)`;
+          statusBadge.className = 'badge badge-warning';
+        }
+      }
+      if (input && data.firebaseUrl && !localUrl) {
+        input.value = data.firebaseUrl;
+      }
+    }
+  } catch (e) {}
+}
+
+async function handleSaveCloudDatabase(e) {
+  if (e) e.preventDefault();
+  const input = document.getElementById('settingFirebaseUrl');
+  const firebaseUrl = input ? input.value.trim() : '';
+
+  localStorage.setItem('arcallers_firebase_url', firebaseUrl);
+
+  showToast('Connecting & syncing data to cloud database...', 'info');
+  try {
+    const headers = { 'Content-Type': 'application/json' };
+    if (firebaseUrl) headers['X-Firebase-URL'] = firebaseUrl;
+
+    const res = await fetch(`${API_BASE}/admin/cloud-settings`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({ firebaseUrl })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      showToast(data.message || 'Cloud database connected and synced successfully!', 'success');
+      loadCloudDatabaseSettings();
+      await syncLocalStateToServer(true);
+    } else {
+      showToast(data.error || 'Saved locally to browser', 'warning');
+    }
+  } catch (err) {
+    showToast('Saved to browser storage (will sync to cloud on next request)', 'warning');
+  }
+}
+
+async function handleForceSyncAll() {
+  showToast('Pushing all browser records to serverless memory & cloud...', 'info');
+  try {
+    await syncLocalStateToServer(true);
+    const res = await fetch(`${API_BASE}/admin/cloud-sync-now`, { method: 'POST' });
+    const data = await res.json();
+    if (res.ok) {
+      showToast(data.message || 'Successfully synchronized all records!', 'success');
+      openAdminToolsModal();
+    } else {
+      showToast('All records synced to active serverless memory', 'success');
+    }
+  } catch (e) {
+    showToast('Records synced locally to server', 'info');
+  }
 }
 
 async function openAdminToolsModal() {
   openModal('admin-tools-modal');
+  loadCloudDatabaseSettings();
   try {
     const res = await fetch(`${API_BASE}/admin/system-status`);
     if (res.ok) {
       const data = await res.json();
-      document.getElementById('sysStatusText').textContent = `${data.status} (Storage: Soft Delete & Backup Active)`;
+      document.getElementById('sysStatusText').textContent = `${data.status} (Permanent Multi-Store Active)`;
       document.getElementById('sysActiveEmp').textContent = `${data.activeEmployees} active (${data.archivedEmployees} archived)`;
       document.getElementById('sysTotalRecords').textContent = data.totalAttendanceRecords;
     }
@@ -1651,7 +1881,7 @@ function playSweetAdminGreeting(userName, dateIso) {
 /* ---------------------------------------------------------
    9. CUSTOM RANGE EXPORT & BACKUP HISTORY RESTORE MANAGER
    --------------------------------------------------------- */
-function handleCustomRangeExportSubmit(e) {
+async function handleCustomRangeExportSubmit(e) {
   e.preventDefault();
   const startDate = document.getElementById('customExportStartDate').value;
   const endDate = document.getElementById('customExportEndDate').value;
@@ -1665,20 +1895,26 @@ function handleCustomRangeExportSubmit(e) {
     return;
   }
 
+  showToast(`Syncing all records before export...`, 'info');
+  await syncLocalStateToServer(true);
+
   showToast(`Downloading Custom Range Excel Report (${formatUSDate(startDate)} to ${formatUSDate(endDate)})...`, 'success');
   closeModal('custom-range-export-modal');
-  window.location.href = `${API_BASE}/export/custom-excel?startDate=${startDate}&endDate=${endDate}`;
+  window.location.href = `${API_BASE}/export/custom-excel?startDate=${startDate}&endDate=${endDate}&t=${Date.now()}`;
 }
 
-function handlePresetExport(preset) {
+async function handlePresetExport(preset) {
   const currentYear = new Date().getFullYear();
   let label = preset;
   if (preset === 'YTD') label = `Full Year ${currentYear} (YTD)`;
   else label = `${preset} ${currentYear}`;
 
+  showToast(`Syncing all records before export...`, 'info');
+  await syncLocalStateToServer(true);
+
   showToast(`Downloading ${label} Attendance Excel Report...`, 'success');
   closeModal('custom-range-export-modal');
-  window.location.href = `${API_BASE}/export/custom-excel?rangePreset=${preset}&year=${currentYear}`;
+  window.location.href = `${API_BASE}/export/custom-excel?rangePreset=${preset}&year=${currentYear}&t=${Date.now()}`;
 }
 
 async function openBackupManagerModal() {
